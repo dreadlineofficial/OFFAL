@@ -137,6 +137,17 @@ class Fuses {
     // the fuses were hidden in the dead
     this.bags = [];
     for (let i = 0; i < n + 1; i++) { // one spare bag: one of them is empty
+      if (G.L.hall) { // the factory floor: laid out against a wall where somebody left them, cold rooms first, never in an aisle
+        const cold = (ri) => ['morgue', 'freezer', 'butcher', 'bunks'].includes(G.L.rooms[ri].type);
+        const w = B.takeWall(([x, y, , ri]) => !B.inWing(x, y) && cold(ri)) || B.takeWall(([x, y]) => !B.inWing(x, y));
+        if (!w) break;
+        const [tx, ty, [dx, dy]] = w, x = tileCenter(tx) + dx * 0.42, z = tileCenter(ty) + dy * 0.42;
+        const bag = add(P.bodyBag(mats, rng), x, z, Math.atan2(-dx, -dy) + (rng() < 0.5 ? 0 : Math.PI) + (rng() - 0.5) * 0.12);
+        B.group.add(P.decal(mats.pool[(rng() * 3) | 0], 1.1 + rng() * 0.5, x - dx * 0.2, z - dy * 0.2, rng() * 6)); // what seeped out
+        if (rng() < 0.7) B.group.add(P.decal(mats.drag, 2, x - dx * 1.4, z - dy * 1.4, Math.atan2(dx, dy) + Math.PI / 2)); // how it got here
+        this.bags.push({ obj: bag, pos: new THREE.Vector3(x, 0.15, z), searched: false, hasFuse: i < n });
+        continue;
+      }
       const t = ctx.chain ? B.takeTile(([x, y, ri]) => !B.inWing(x, y) && (G.L.rooms[ri].type === 'morgue' || rng() < 0.5)) || B.takeTile(([x, y]) => !B.inWing(x, y))
         : B.takeTile(([x, y, ri]) => G.L.rooms[ri].type === 'morgue' || rng() < 0.5) || B.takeTile();
       if (!t) break;
@@ -303,7 +314,7 @@ class Keypad {
   }
   line() { return this.opened ? null : `SHUTTER CODE ${this.known.map((k) => (k === null ? '_' : k)).join(' ')}`; }
   title() { return 'FIND THE SHUTTER CODE'; }
-  liftMsg() { return this.ctx.chain ? 'LOCKED \u2014 OPEN THE SHUTTER FIRST' : null; }
+  liftMsg() { return this.ctx.chain ? 'IT WON\u2019T MOVE' : null; }
   solve() { this.load({ ...this.save(), read: this.notes.map(() => true), opened: true }); }
   save() { return { read: this.notes.map((n) => n.read), opened: this.opened }; }
   load(s) {
@@ -539,7 +550,7 @@ class Valves {
       if (this.solved) {
         G.audio.powerOn(v.pos);
         G.noise(v.pos, 22, true);
-        UI.message(this.ctx.chain ? 'Pressure’s down. The chain brake is still wound on, and its crank is gone.' : 'Pressure’s down. The lift brake is off.', 4);
+        if (!this.ctx.chain) UI.message('Pressure’s down. The lift brake is off.', 4);
       } else UI.message('That one’s off.', 2);
       return;
     }
@@ -633,7 +644,7 @@ class Breakers {
     }
     if (this.solved) {
       G.audio.lineRunning(false);
-      if (this.ctx.chain) UI.message('The line stops. The lift still won’t go: steam has the brake locked.', 5);
+      if (this.ctx.chain) { /* the line winds down: you hear it */ }
       else { G.frenzy = true; UI.message('The line stops. They both heard that. GET TO THE LIFT.', 5); }
     } else UI.message(`${this.switches.length - this.pulled} more. The alarm is screaming.`, 3);
   }
@@ -1080,7 +1091,7 @@ class Hooks {
     const G = this.ctx.G;
     this.done = true; this.carry = false;
     G.audio.clank(this.brake, 1); G.audio.chainRattle?.(this.brake);
-    UI.message(this.ctx.chain ? 'The brake comes off with a bang that runs up the shaft. One thing left: the master override.' : 'The brake comes off with a bang that runs up the shaft. The lift is free.', 4.5);
+    UI.message(this.ctx.chain ? 'The brake comes off with a bang that runs up the shaft.' : 'The brake comes off with a bang that runs up the shaft. The lift is free.', 4.5);
   }
   goals() { return this.done ? [] : this.carry ? [this.brake] : this.bodies.filter((b) => !b.searched).map((b) => b.pos); }
   line() { return this.done ? null : this.carry ? 'CRANK ✓ — THE BRAKE' : `BODIES ${this.bodies.filter((b) => b.searched).length}/${this.bodies.length}`; }
@@ -1250,7 +1261,7 @@ class Override {
     G.frenzy = true;
     G.frenzyT = 4; // a head start: then they know where you are
     for (const l of G.B.lamps) if (l.state === 'dead') l.state = 'flicker';
-    UI.message('The lift is unlocked. Every alarm on the floor just went off. They both know where you are. RUN.', 6);
+    // (no line: every light comes on, every alarm goes off, and they come)
   }
   goals() { return this.done ? [] : [this.pos]; }
   line() { return this.done ? null : 'MASTER OVERRIDE: LINE CONTROL'; }
@@ -1289,7 +1300,7 @@ export class Puzzles {
       if (p === cur) { past = true; return p.interactables(); }
       if (!past) return p.interactables();
       // a job further down the chain: what's written can be read now; the rest is dead, and says what comes first
-      const why = 'LOCKED \u2014 FIRST: ' + cur.title().replace(/<[^>]+>/g, '');
+      const why = cur.kind === 'fuses' ? 'NO POWER' : 'IT WON\u2019T BUDGE'; // (it doesn't say why: you work that out)
       return p.interactables().map((it) => (/^READ /.test(it.label) ? it : { pos: it.pos, range: it.range, minFacing: it.minFacing, label: why }));
     });
   }

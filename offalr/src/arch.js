@@ -44,6 +44,7 @@ function dress(L, mats, group, theme) {
     for (let k = 0; k < 4; k++) {
       const [dx, dy] = DIRS[k];
       if (open(x + dx, y + dy)) continue;
+      if (L.house && L.house[(y + dy) * W + x + dx]) continue; // a machine housing on the factory floor (hall.js dresses those)
       if (x + dx >= 0 && y + dy >= 0 && x + dx < W && y + dy < H && crawl[(y + dy) * W + x + dx]) continue; // a crouchway's mouth
       // this tile has a wall on side k: (fx, fz) is the middle of the wall face, n points back into the tile
       const fx = cx + dx * TILE / 2, fz = cz + dy * TILE / 2, nx = -dx, nz = -dy, yaw = Math.atan2(dx, dy); // the part's local x runs along the wall

@@ -197,10 +197,25 @@ function hallRooms(c) {
     for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) { set(xx, yy, false, ri); low[yy * W + xx] = 1; }
     set(doorX, doorY, true); low[doorY * W + doorX] = 1;
   };
-  for (let x = left; ;) { const w = rng.int(4, 6); if (x + w - 1 > hallR) break; if (rng() < 0.85) small(x, 2, w, strip, [x + (w >> 1), 2 + strip]); x += w + 1; }
-  for (let y = top; ;) { const h = rng.int(4, 6); if (y + h - 1 > bottom) break; if (rng() < 0.85) small(2, y, strip, h, [2 + strip, y + (h >> 1)]); y += h + 1; }
+  // crouch spaces (he doesn't fit): a vent through the wall from most of the small rooms into the hall
+  const crawlAt = (c.hallCrawl = []), house = (c.house = new Uint8Array(W * H));
+  const vent = (x, y) => { set(x, y, false); crawlAt.push(y * W + x); };
+  for (let x = left; ;) { const w = rng.int(4, 6); if (x + w - 1 > hallR) break; if (rng() < 0.85) { small(x, 2, w, strip, [x + (w >> 1), 2 + strip]); if (w >= 5 && rng() < 0.75) vent(rng() < 0.5 ? x : x + w - 1, 2 + strip); } x += w + 1; }
+  for (let y = top; ;) { const h = rng.int(4, 6); if (y + h - 1 > bottom) break; if (rng() < 0.85) { small(2, y, strip, h, [2 + strip, y + (h >> 1)]); if (h >= 5 && rng() < 0.75) vent(2 + strip, rng() < 0.5 ? y : y + h - 1); } y += h + 1; }
+  // and three machine housings out on the floor, 2.6 m of steel with a crawl tunnel through the middle of each
+  const zones = rooms.map((r, i) => i).filter((i) => i > 0 && !rooms[i].fixed && rooms[i].x < ex0 && rooms[i].y + rooms[i].h < bottom - 1);
+  for (const zi of rng.shuffle(zones).slice(0, 3)) {
+    const r = rooms[zi];
+    r.type = 'housing'; r.fixed = true;
+    const y0 = r.y + 2, x0 = r.x + 1, x1 = r.x + r.w - 2;
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y0 + 2; y++) {
+      const i = y * W + x;
+      house[i] = y === y0 + 1 ? 2 : 1;
+      if (y === y0 + 1) { grid[i] = 1; roomOf[i] = -1; crawlAt.push(i); } else { grid[i] = 0; roomOf[i] = -1; }
+    }
+  }
   rooms.forEach((r) => { r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1); });
-  c.hallInfo = { left, top, bottom, hallR, ex0, annexW, zw, zh, gap };
+  c.hallInfo = { left, top, bottom, hallR, ex0, annexW, zw, zh, gap, houseH: 2.6 };
   return { ax, ay };
 }
 
@@ -370,7 +385,7 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     k++;
   }
 
-  }
+  } else for (const i of c.hallCrawl || []) crawl[i] = 1; // (the factory floor's own: hallRooms)
   // room jobs: what each room is for depends on what kind of floor it is
   const others = rooms.slice(1);
   if (theme === 'plant') {
@@ -419,7 +434,7 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     for (let i = 0; i < W * H; i++) if (corridor[i] && !crawl[i]) water[i] = 1;
     rooms.forEach((r, ri) => { if (r.type === 'cistern') for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) water[y * W + x] = 1; });
   }
-  return { depth, seed, W, H, grid, roomOf, corridor, crawl, water, theme, rooms, alcove: { x: ax, y: ay }, dist, block: new Uint8Array(W * H), D, hall: !!D.hall, hallInfo: c.hallInfo, low: c.low, ceil: Math.max(WALL_H, D.ceil || 0) };
+  return { depth, seed, W, H, grid, roomOf, corridor, crawl, water, theme, rooms, alcove: { x: ax, y: ay }, dist, block: new Uint8Array(W * H), D, hall: !!D.hall, hallInfo: c.hallInfo, low: c.low, house: c.house, ceil: Math.max(WALL_H, D.ceil || 0) };
 }
 
 // ---------- geometry ----------
@@ -460,7 +475,7 @@ export function buildLevel(L, mats) {
   const CEIL = L.ceil || WALL_H, low = new Set([L.alcove.y * W + L.alcove.x]);
   if (CEIL > WALL_H && L.door) low.add(L.door.y * W + L.door.x);
   if (L.low) for (let i = 0; i < W * H; i++) if (L.low[i]) low.add(i);
-  const UPPER = 99; // (the panels above the first 3 m: their own surface where the floor has one)
+  const UPPER = 99, HOUSE = 98; // (the panels above the first 3 m: their own surface where the floor has one; machine housings)
   const stack = (k, p0, r, n) => { k = UPPER; for (let h = WALL_H; h < CEIL - 0.01; h += WALL_H) buf(wallBufs, k).quad([p0[0], h, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, Math.min(WALL_H, CEIL - h), 0], n, (h / WALL_H) % 2 === 1); };
   const wallBufs = new Map(), floorBufs = new Map(), ceil = new Geo();
   const buf = (map, k) => map.get(k) || map.set(k, new Geo()).get(k);
@@ -484,6 +499,12 @@ export function buildLevel(L, mats) {
       const n = [-dx, 0, -dy];
       const r = [-dy, 0, dx]; // so that r x up points along n: the face is front-facing from inside the tile
       const p0 = [cx + dx * TILE / 2 - r[0] * TILE / 2, 0, cz + dy * TILE / 2 - r[2] * TILE / 2];
+      if (L.house && L.house[nb]) { // a machine housing on the factory floor: steel to 2.6 m, its tunnel's mouth below that
+        const hb = L.hallInfo.houseH;
+        if (crawl[nb]) buf(wallBufs, HOUSE).quad([p0[0], CRAWL_H, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, hb - CRAWL_H, 0], n, false);
+        else buf(wallBufs, HOUSE).quad(p0, [r[0] * TILE, 0, r[2] * TILE], [0, hb, 0], n, false);
+        continue;
+      }
       let gore = D.intro ? 0 : rng() < 0.3 + 0.17 * D.gore + goreBoost * 0.2 ? Math.min(3, 1 + Math.floor(rng() * (D.gore + 1 + goreBoost))) : 0;
       const flip = rng() < 0.5;
       // a crouchway's mouth: only the wall above it
@@ -500,6 +521,7 @@ export function buildLevel(L, mats) {
     const ch = low.has(i) ? WALL_H : CEIL;
     ceil.quad([x * TILE, ch, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false);
   }
+  if (L.house) for (let i = 0; i < W * H; i++) if (L.house[i]) { const x = i % W, y = (i / W) | 0; buf(wallBufs, HOUSE).quad([x * TILE, L.hallInfo.houseH, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], false); ceil.quad([x * TILE, CEIL, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false); } // their tops, and the roof over them
   // the crouchways themselves: their own rng, so the rest of the floor dresses the same as it always has
   {
     const crng = makeRng(L.seed * 13 + 5), cw = new Geo(), cf = new Geo(), cc = new Geo();
@@ -531,7 +553,7 @@ export function buildLevel(L, mats) {
   }
   // every kind of floor has its own surfaces; the meatworks keeps the originals
   const TM = themeMaterials(mats, L.depth === 0 && L.theme === 'offices' ? 'hiring' : L.hall ? 'plant98' : L.depth === 9 && (L.theme || 'plant') === 'plant' ? 'smokehouse' : L.theme || 'plant'); // (the hiring office: its own surfaces, not Administration's)
-  for (const [k, g] of wallBufs) { const m = P.mesh(g.build(), k === UPPER ? (TM && TM.upper) || (TM ? TM.walls[0] : mats.walls[0]) : TM ? TM.walls[Math.floor(k / 3)] : mats.walls[k], false); group.add(m); }
+  for (const [k, g] of wallBufs) { const m = P.mesh(g.build(), k === HOUSE ? (TM && TM.upper) || mats.darkMetal : k === UPPER ? (TM && TM.upper) || (TM ? TM.walls[0] : mats.walls[0]) : TM ? TM.walls[Math.floor(k / 3)] : mats.walls[k], false); group.add(m); }
   for (const [k, g] of floorBufs) { const m = P.mesh(g.build(), TM ? TM.floors[k] : mats.floors[k], false); group.add(m); }
   group.add(P.mesh(ceil.build(), TM ? TM.ceil : mats.ceil, false));
   if (TEX.pbr) dressArchitecture(L, mats, group, L.theme || 'plant'); // the remaster's rails, pipes, beams and frames
@@ -945,7 +967,7 @@ export function buildLevel(L, mats) {
   L.rooms.forEach((r, ri) => {
     const rx = r.x * TILE, rz = r.y * TILE, rw = r.w * TILE, rh = r.h * TILE;
     const themeLamp = { morgue: 'tube', offices: 'tube', freezer: 'tube', sewer: 'bulb' }[L.theme];
-    if (r.type !== 'lift') lampAt(rx + rw / 2, rz + rh / 2, themeLamp || (r.w * r.h >= 12 ? 'tube' : 'bulb'), ri);
+    if (r.type === 'housing') { /* (no lamp: the housing is under it) */ } else if (r.type !== 'lift') lampAt(rx + rw / 2, rz + rh / 2, themeLamp || (r.w * r.h >= 12 ? 'tube' : 'bulb'), ri);
     else lampAt(rx + rw / 2, rz + rh / 2 - 1, 'tube', ri);
     if (furnish(r, ri)) { /* the other kinds of floor: see furnish() */ } else if (r.type === 'cold' || r.type === 'hanging') {
       // rails of meat on the tile corners, so there is always a way between them (if you can stand to)
@@ -1025,7 +1047,7 @@ export function buildLevel(L, mats) {
     const lockerCap = L.hall ? 5 : L.theme && L.theme !== 'plant' ? 20 : Infinity; // (the factory floor: only a few places to hide)
     if (out.lockers.length < lockerCap && (r.type === 'lockers' || (r.type !== 'lift' && rng() < (L.theme === 'morgue' ? 0.12 : 0.4)))) {
       const sides = [];
-      for (const [x, y] of allTiles(r)) for (const s of wallSides(x, y)) sides.push([x, y, s]);
+      for (const [x, y] of allTiles(r)) if (grid[y * W + x]) for (const s of wallSides(x, y)) sides.push([x, y, s]); // (on the floor: not inside a machine housing)
       rng.shuffle(sides);
       const want = r.type === 'lockers' ? Math.min(6, sides.length) : 1;
       let placed = 0;
@@ -1117,7 +1139,7 @@ export function buildLevel(L, mats) {
 
   // placement for everything that comes after (pickups here, puzzles in puzzles.js)
   const freeTiles = [];
-  L.rooms.forEach((r, ri) => { if (r.type !== 'lift') for (const [x, y] of allTiles(r)) if (!used.has(x + ',' + y) && !L.block[y * W + x]) freeTiles.push([x, y, ri]); });
+  L.rooms.forEach((r, ri) => { if (r.type !== 'lift') for (const [x, y] of allTiles(r)) if (!used.has(x + ',' + y) && !L.block[y * W + x] && grid[y * W + x] && !crawl[y * W + x]) freeTiles.push([x, y, ri]); });
   rng.shuffle(freeTiles);
   out.inWing = inWing;
   out.takeTile = (pred = () => true) => {

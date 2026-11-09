@@ -91,6 +91,15 @@ Done recently:
   Chain (`chain`, puzzles.js): fuses → keypad → scale → kill switches (one in the wing) → valves → hooks (brake crank)
   → `Override` (line control desk, furthest room) unlocks the lift; frenzy after it (4 s head start). Locked jobs say
   "LOCKED — FIRST: …"; notes/wall writing readable any time. Saves from an older B10 (`b10` < 4) restart B10.
+- B10 polish: crouch spaces (`L.crawl` vents from small rooms through the wall; 3 machine housings `L.house`, 2.6 m
+  steel with a crawl tunnel; shell draws them via HOUSE key). Set pieces in hall.js: reefer trailer at a south-wall
+  dock, raised supervisor's office (lit blinds, a hanging shape), time clock + card racks by the lift, export crates
+  (port stencils atlas), owner's pin board (farm demolition notice 26 Oct 1998, family photo with the mother's face
+  scratched out). Fuse bags on B10 lie against walls (cold rooms first) with pools/drag marks. B10 music: audio.js
+  `setFinale`/`finaleTick` (72 bpm pulse, flat-2 bass, cluster swells, rising tone; 104 bpm after the override).
+- Show, don't tell: briefing cards only teach controls (TEACH set) on depth ≤ 2; the objective line only on B1–B2;
+  listen arrow text only on B1; chain-locked things say "NO POWER" / "IT WON'T BUDGE"; TAB on B10 shows only done +
+  current job ("???" after). Owner has their own lore timeline (prequels/sequels reveal it): keep clues subtle.
 - Windows splash (`offalr-desktop/splash.bmp`) = make-art.mjs `splash_640x299`: the banner only (no text, no subtitle).
 - Textures vanishing: every 2D canvas forced CPU-backed in `three-r.js` (GPU canvases got blanked → black
   normal/AO maps → dark walls); env map rebuilt on WebGL context restore.

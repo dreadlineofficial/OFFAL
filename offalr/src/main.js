@@ -393,6 +393,7 @@ function loadFloor(depth, seed) {
   guide.reset();
   if (G.mode === 'hunt') setupHunt();
   audio.setDepth(depth);
+  audio.setFinale(!!D.hall); // (B10 has its own music)
   // weld everything that never moves into a few big meshes (see bake.js), and stop drawing past the fog
   if (REMASTER) {
     declutter(B.group); // no bodies crammed up against each other
@@ -620,7 +621,7 @@ function updateTransition(dt) {
     audio.setMode('roam');
     // a resumed floor doesn't replay what you already heard on it
     G.beat = { pa: G.floorTime > 55 };
-    if (G.depth > 1 && G.D.tags && G.mode !== 'hunt') setTimeout(() => G.state === 'play' && UI.message(`The lift needs ${G.D.tags} tags. Hold Q to listen.`, 4.5), 2500);
+    if (G.depth === 1 && G.D.tags && G.mode !== 'hunt') setTimeout(() => G.state === 'play' && UI.message(`The lift needs ${G.D.tags} tags. Hold Q to listen.`, 4.5), 2500); // (B1 only: after that you know)
   }
 }
 
@@ -1202,7 +1203,7 @@ function handleInteract(dt) {
         B.gate.off = false;
         audio.gateSlide(B.lift.pos);
         G.noise(B.lift.pos, 26, true); // everything on the floor hears that
-        UI.message('The gate’s coming down.', 3);
+        // (no line for it: you can see the gate coming down)
       });
       break;
     case 'liftInfo': {
@@ -1343,7 +1344,7 @@ function harvest(c) {
   const got = G.B.lift.inserted + player.tags;
   if (got >= G.D.tags) {
     // the last one: and now he knows exactly where you are
-    UI.message('Pulled out a tag. That’s all of them. Get back to the lift.', 4);
+    UI.message(G.depth <= 1 ? 'Pulled out a tag. That’s all of them. Get back to the lift.' : 'Pulled out a tag.', 3);
     setTimeout(() => {
       if (G.state !== 'play') return;
       // the nearer one comes for you; any other goes to stand between you and the lift
@@ -1455,7 +1456,7 @@ function updateLift(dt) {
       if (lf.t > 0.8 && !lf.motor) {
         lf.motor = true;
         audio.liftMotor(true);
-        UI.message(G.D.finale ? 'It\u2019s moving. It\u2019s going UP.' : 'It\u2019s moving. You\u2019re going down.', 3);
+        if (G.D.finale) UI.message('It\u2019s going up.', 3);
       }
       if (lf.t > 0.8) player.shake = Math.max(player.shake, 0.3);
       if (lf.t > 2.2) { if (G.D.finale && G.mode === 'story') startEnding(); else nextFloor(); }
@@ -1589,6 +1590,7 @@ function updateGame(dt, t) {
   G.fear += (Math.max(f, G.scare) - G.fear) * Math.min(1, dt * 2.5);
   audio.setChase(chase ? 1 : 0);
   // the line has stopped: they know exactly where you are, all the time
+  audio.finaleHot = G.frenzy ? 1 : 0;
   if (G.frenzy) {
     G.frenzyT -= dt;
     if (G.frenzyT < 0) {

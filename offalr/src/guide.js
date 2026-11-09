@@ -27,6 +27,8 @@ const BRIEF = {
   bottom: 'This is the bottom. The lift here goes UP, and nothing on this floor works.\n\nSeven jobs: power, the shutter, the counterweight, the line, the steam, the brake crank, the override. Each one needs the one before it. TAB lists them. Notes and writing on the walls can be read any time.',
 };
 
+const TEACH = new Set(['notice', 'start', 'adrenaline', 'near', 'quiet', 'close', 'back', 'lever']);
+
 // a puzzle's title cut down to its first clause and its count: 'LOAD THE SCALE — AT LEAST <b>32 KG</b>' -> 'LOAD THE SCALE <b>32 KG</b>'
 function short(t) {
   const [head, tail = ''] = t.split(' \u2014 ');
@@ -54,7 +56,8 @@ export class Guide {
   }
 
   brief(id) {
-    if (!this.G.hints || this.shown.has(id)) return;
+    // show, don't tell: the cards teach the controls on the first floors only; the jobs on each floor explain themselves
+    if (!this.G.hints || this.shown.has(id) || !TEACH.has(id) || this.G.depth > 2) return;
     this.shown.add(id);
     if (this.briefT > 0) { this.queue.push(id); return; }
     this.showBrief(id);
@@ -73,7 +76,10 @@ export class Guide {
     const have = pl.tags, fed = B.lift.inserted, need = G.D.tags;
     const rows = [];
     if (need) rows.push({ text: 'CUT THE TAGS OUT OF THE DEAD', count: `${have + fed}/${need}`, done: have + fed >= need });
-    for (const p of pz.list) rows.push({ text: short(p.title()).replace(/<[^>]+>/g, ''), sub: p.solved ? '' : (p.line() || ''), done: !!p.solved });
+    for (const p of pz.list) {
+      if (pz.chain && !p.solved && p !== pz.step) { rows.push({ text: '???', done: false }); continue; } // (the finale: you find out what's next by getting there)
+      rows.push({ text: short(p.title()).replace(/<[^>]+>/g, ''), sub: p.solved ? '' : (p.line() || ''), done: !!p.solved });
+    }
     if (G.D.finale) rows.push({ text: 'GET TO THE LIFT. GO UP.', done: false });
     else {
       if (need) rows.push({ text: 'FEED THE TAGS TO THE LIFT', count: `${fed}/${need}`, done: fed >= need });
@@ -135,7 +141,7 @@ export class Guide {
         const a = Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
         UI.$('needle').style.transform = `rotate(${a}rad)`;
         const what = r.goal === lift ? 'THE LIFT' : B.corpses.some((c) => c.pos === r.goal) ? 'A BODY' : 'THE JOB';
-        UI.$('compassD').textContent = `${what} · ${Math.max(1, Math.round(r.len))} M`;
+        UI.$('compassD').textContent = G.depth <= 1 ? `${what} · ${Math.max(1, Math.round(r.len))} M` : ''; // (past B1, just the arrow)
         compass.classList.add('on');
       }
     } else compass.classList.remove('on');
@@ -152,7 +158,9 @@ export class Guide {
     else obj = short(blocker.title());
     const hint = phase === 'open' && G.floorTime < 20 ? '<small><kbd>TAB</kbd> TASKS</small>' : ''; // the first moments of a floor only
     const key = obj + hint;
-    if (key !== this.objKey) { this.objKey = key; UI.$('objective').innerHTML = UI.keys(key); }
+    // (the line at the top only while you're learning: after B2 the floor has to tell you, or TAB does)
+    const shown = G.hints && G.depth <= 2 ? key : '';
+    if (shown !== this.objKey) { this.objKey = shown; UI.$('objective').innerHTML = UI.keys(shown); }
     if (G.tasksOpen) this.taskSheet(obj);
 
     // the briefing

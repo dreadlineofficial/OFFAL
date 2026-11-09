@@ -184,6 +184,12 @@ export class AudioEngine {
     trem.start();
     this.chaseStep = 0;
     this.chaseNext = 0;
+    // B10's own music: a held cluster that swells, under a pulse finaleTick() drives
+    this.finaleBus = this.gain(0, this.mus);
+    this.finaleSwell = this.gain(0, this.filter('lowpass', 1800, 0.7, this.gain(0.014, this.finaleBus)));
+    for (const f of [146.8, 155.6, 220, 233.1, 293.7]) { const o = this.osc('sawtooth', f, this.finaleSwell); o.detune.value = (Math.random() - 0.5) * 14; o.start(); }
+    this.finaleRise = this.osc('sine', 600, this.gain(0.012, this.finaleBus)); this.finaleRise.start();
+    this.finaleNext = 0; this.finaleStep = 0; this.finaleHot = 0;
     // your own breathing
     this.breathG = this.gain(0, this.sfx);
     this.noise(false, this.filter('bandpass', 900, 0.8, this.breathG)).start();
@@ -203,7 +209,8 @@ export class AudioEngine {
     this.chaseLevel = 0;
     const drone = { menu: 1, roam: 0.22, ending: 0 }[mode], roam = { menu: 0, roam: 1, ending: 0 }[mode];
     this.droneBus.gain.setTargetAtTime(drone, this.t, 1.2);
-    this.roamBus.gain.setTargetAtTime(roam, this.t, 1.5);
+    this.roamBus.gain.setTargetAtTime(this.finale ? 0 : roam, this.t, 1.5);
+    this.finaleBus.gain.setTargetAtTime(this.finale ? roam : 0, this.t, 1.5);
   }
   // being chased: the music cuts out and it's just your heart (main.js beats it)
   setChase(level) {
@@ -214,7 +221,8 @@ export class AudioEngine {
     this.chaseBus.gain.setTargetAtTime(level ? 1 : 0, this.t, level ? 0.06 : 1.6);
     if (level) { this.chaseNext = this.t + 0.02; this.chaseStep = 0; }
     if (this.mode !== 'roam') return;
-    this.roamBus.gain.setTargetAtTime(level ? 0 : 1, this.t, level ? 0.08 : 2.5);
+    this.roamBus.gain.setTargetAtTime(level || this.finale ? 0 : 1, this.t, level ? 0.08 : 2.5);
+    this.finaleBus.gain.setTargetAtTime(level || !this.finale ? 0 : 1, this.t, level ? 0.08 : 2.5);
     this.droneBus.gain.setTargetAtTime(level ? 0.08 : 0.22, this.t, level ? 0.08 : 2.5);
   }
   // the chase pulse, scheduled a little ahead on a 160 bpm eighth-note grid
@@ -241,6 +249,30 @@ export class AudioEngine {
       this.chaseNext += step;
     }
   }
+  // the last floor: its own music instead of the pad and the music box
+  setFinale(on) {
+    this.finale = !!on;
+    if (!this.ctx) return;
+    this.finaleNext = this.t + 0.1; this.finaleStep = 0;
+    this.setMode(this.mode);
+  }
+  // a mechanical pulse, scheduled ahead: a low thoom on the beat, metal between, a bass that leans on the flat second;
+  // a swell of the held cluster every four bars, and a high tone that keeps climbing. hot: the override is pulled
+  finaleTick() {
+    if (!this.ctx || !this.finale || this.mode !== 'roam' || this.chaseLevel) return;
+    const hot = this.finaleHot, bpm = hot ? 104 : 72, step = 60 / bpm / 2;
+    const bass = [73.4, 73.4, 77.8, 73.4, 69.3, 73.4, 77.8, 82.4];
+    while (this.finaleNext < this.t + 0.2) {
+      const at = Math.max(0, this.finaleNext - this.t), k = this.finaleStep++, bus = this.finaleBus;
+      if (k % 2 === 0) this.tone(bus, { f: 62, f2: 34, dur: 0.5, vol: hot ? 0.5 : 0.36, at });
+      else this.burst(bus, { type: 'bandpass', f: 2400 + (k % 3) * 700, q: 14, dur: 0.05, vol: hot ? 0.09 : 0.05, at });
+      if (k % 8 === 6) this.burst(bus, { type: 'lowpass', f: 600, dur: 0.18, vol: 0.12, at, brown: true }); // the line, slamming
+      this.tone(this.filter('lowpass', hot ? 700 : 420, 4, bus), { type: 'sawtooth', f: bass[(k >> 1) % 8], dur: step * 1.7, vol: hot ? 0.11 : 0.08, at });
+      if (k % 32 === 0) { const t0 = this.t + at, g = this.finaleSwell.gain; g.cancelScheduledValues(t0); g.setValueAtTime(g.value, t0); g.linearRampToValueAtTime(hot ? 1 : 0.8, t0 + step * 12); g.linearRampToValueAtTime(0.1, t0 + step * 30); }
+      if (k % 64 === 0) { const t0 = this.t + at, f = this.finaleRise.frequency; f.cancelScheduledValues(t0); f.setValueAtTime(520, t0); f.exponentialRampToValueAtTime(hot ? 1400 : 1040, t0 + step * 63); }
+      this.finaleNext += step;
+    }
+  }
   musicBox() {
     // A minor pentatonic, two octaves up, a little out of tune like an old box
     const scale = [880, 1046.5, 1174.7, 1318.5, 1568, 1760, 2093];
@@ -263,7 +295,8 @@ export class AudioEngine {
   ambienceTick(dt, pos) {
     if (!this.ctx) return;
     this.chaseTick();
-    if (this.mode === 'roam' && !this.chaseLevel) {
+    this.finaleTick();
+    if (this.mode === 'roam' && !this.chaseLevel && !this.finale) {
       this.boxT -= dt;
       if (this.boxT < 0) { this.boxT = 4 + Math.random() * 9; this.musicBox(); }
     }

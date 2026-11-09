@@ -112,6 +112,130 @@ function dress(L, mats, group, out, h) {
   for (let x = hi.left + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) for (const e of [x * TILE + 0.12, (x + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, e, (hi.top + hi.bottom + 1) / 2 * TILE, 0.14, (hi.bottom - hi.top + 1) * TILE - 0.4, 0, 1);
   for (let y = hi.top + hi.zh; y < hi.bottom; y += hi.zh + hi.gap) for (const e of [y * TILE + 0.12, (y + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, (hi.left + hi.hallR + 1) / 2 * TILE, e, 0.14, (hi.hallR - hi.left + 1) * TILE - 0.4, Math.PI / 2, 1);
 
+  // ---- set pieces: the things only this floor has. Nothing here explains itself ----
+  const reserve = (tiles) => { // claim floor tiles for something, if every one of them can be given up
+    const done = [];
+    for (const [tx, ty] of tiles) { if (h.used.has(tx + ',' + ty) || !h.canBlock(tx, ty)) break; h.blockTile(tx, ty); done.push([tx, ty]); }
+    if (done.length === tiles.length) return true;
+    for (const [tx, ty] of done) { L.block[ty * W + tx] = 0; h.used.delete(tx + ',' + ty); }
+    return false;
+  };
+  const free = (tx, ty) => L.grid[ty * W + tx] && !L.block[ty * W + tx] && !h.used.has(tx + ',' + ty);
+  const lx = L.rooms[0].x, HB = hi.houseH;
+
+  // the machine housings: long steel ovens with a crawl tunnel through the middle; stacks up into the roof
+  for (const r of L.rooms) {
+    if (r.type !== 'housing') continue;
+    const x0 = r.x + 1, x1 = r.x + r.w - 2, y0 = r.y + 2, cz = tc(y0 + 1), cx = (tc(x0) + tc(x1)) / 2, len = (x1 - x0 + 1) * TILE;
+    for (const sx of [tc(x0) + 0.6, tc(x1) - 0.6]) {
+      const st = mesh(cyl(0.34, 0.34, 1, 14), M.grey2); st.scale.y = CEIL - 1.5 - HB; put(st, sx, HB + (CEIL - 1.5 - HB) / 2, cz);
+      for (const y of [HB + 0.5, HB + 3.5]) put(mesh(cyl(0.38, 0.38, 0.1, 14), dark), sx, y, cz);
+    }
+    const tp = mesh(cyl(0.16, 0.16, len - 1.2, 10), red); tp.rotation.z = Math.PI / 2; put(tp, cx, HB + 0.3, cz + 1.2);
+    for (const e of [y0 * TILE - 0.01, (y0 + 3) * TILE + 0.01]) { const band = mesh(box(len, 0.16, 0.02), red); put(band, cx, HB - 0.08, e); } // a red band round the top edge
+    const panel = new THREE.Group();
+    panel.add(mesh(box(0.8, 1.0, 0.18), dark));
+    for (let i = 0; i < 3; i++) { const l = mesh(geo('ovLamp', () => new THREE.SphereGeometry(0.035, 8, 6)), i ? M.beaconHot : M.beacon); l.position.set(-0.22 + i * 0.22, 0.32, 0.1); panel.add(l); }
+    const dial = mesh(cyl(0.12, 0.12, 0.04, 16), M.grey2); dial.rotation.x = Math.PI / 2; dial.position.set(0, -0.05, 0.1); panel.add(dial);
+    put(panel, tc(x0 + 2), 1.4, y0 * TILE - 0.09, Math.PI);
+  }
+
+  // the loading dock: a reefer trailer backed in through a roller door in the south wall, its doors open on the dark
+  const wallZ = (hi.bottom + 1) * TILE;
+  for (const tx of rng.shuffle([...Array(hi.hallR - hi.left - 5).keys()].map((k) => hi.left + 3 + k))) {
+    if (Math.abs(tx - (lx + 1.5)) < 7 || !L.grid[(hi.bottom - 1) * W + tx] || L.grid[(hi.bottom + 1) * W + tx]) continue;
+    if (!reserve([[tx, hi.bottom], [tx, hi.bottom - 1]])) continue;
+    const g = new THREE.Group(), x = tc(tx);
+    const box2 = (w, ht, d, m, px, py, pz) => { const o = mesh(box(w, ht, d), m); o.position.set(px, py, pz); g.add(o); return o; };
+    box2(2.5, 0.12, 3.1, dark, 0, 1.2, -1.55); // the trailer's floor, at dock height
+    for (const s2 of [-1, 1]) box2(0.06, 2.6, 3.1, M.trailer, s2 * 1.25, 2.56, -1.55); // its sides
+    box2(2.56, 0.08, 3.1, M.trailer, 0, 3.9, -1.55); // its roof
+    for (const s2 of [-1, 1]) box2(0.12, 2.8, 0.12, M.grey2, s2 * 1.25, 2.5, -3.08); // the rear frame
+    box2(2.62, 0.14, 0.14, M.grey2, 0, 3.86, -3.08); box2(2.62, 0.2, 0.2, dark, 0, 1.1, -3.08); // its header and bumper
+    for (const s2 of [-1, 1]) { const d = box2(1.22, 2.6, 0.05, M.trailerDoor, s2 * 1.9, 2.55, -3.12); d.rotation.y = s2 * 0.12; } // the doors, swung back
+    for (const s2 of [-1, 1]) for (const wz of [-2.2, -1.2]) { const wh = mesh(cyl(0.48, 0.48, 0.3, 16), dark); wh.rotation.z = Math.PI / 2; wh.position.set(s2 * 1.0, 0.48, wz); g.add(wh); }
+    for (let i = 0; i < 3; i++) { const c = mesh(geo('reefMeat', () => new THREE.CapsuleGeometry(0.2, 0.8, 4, 10)), mats.meat || M.wrapMeat); c.position.set(-0.6 + i * 0.6, 2.75, -0.9 - (i % 2) * 0.6); g.add(c); const hk = rod(chain, -0.6 + i * 0.6, -0.9 - (i % 2) * 0.6, 3.25, 3.86, 0.01); g.add(hk); }
+    box2(2.4, 0.02, 2.9, M.reefFloor, 0, 1.27, -1.6); // a floor that has been hosed and not hosed enough
+    // the opening in the wall round it: hazard-striped jambs, the roller door up in its drum, two black bumpers
+    for (const s2 of [-1, 1]) box2(0.3, 4.6, 0.12, M.jamb, s2 * 1.65, 2.3, -0.05);
+    box2(3.6, 0.7, 0.7, M.grey2, 0, 4.95, -0.35);
+    for (const s2 of [-1, 1]) box2(0.25, 0.35, 0.3, dark, s2 * 1.0, 1.0, -0.15);
+    put(g, x, 0, wallZ);
+    h.collider(x - 1.35, wallZ - 3.25, x + 1.35, wallZ);
+    break;
+  }
+
+  // the supervisor's office: a box up on steel legs over one of the work areas, stairs up to it, its blinds lit
+  for (const r of rng.shuffle(L.rooms.filter((q) => !q.fixed && q.type !== 'lift' && q.x < hi.ex0 && q.w >= 9))) {
+    const ox = r.x + 3, oy = r.y + 5; // (clear of the work area's own lamp, in its middle) the office spans tiles ox..ox+2 (6 m) by oy..oy+1 (4 m)
+    const legs = [[ox, oy], [ox + 2, oy], [ox, oy + 1], [ox + 2, oy + 1]];
+    const stair = [[ox + 3, oy + 1], [ox + 4, oy + 1]];
+    if (!legs.every(([tx, ty]) => free(tx, ty)) || !stair.every(([tx, ty]) => free(tx, ty))) continue;
+    // nothing tall already where it would be (a rail, a chain's drop to the roof, a machine)
+    const vol = new THREE.Box3(new THREE.Vector3(ox * TILE - 0.2, 2.7, oy * TILE - 0.2), new THREE.Vector3((ox + 5) * TILE, 6.2, (oy + 2) * TILE + 0.2));
+    const big = (b3) => b3.max.x - b3.min.x > 24 || b3.max.z - b3.min.z > 24; // (the floor, walls and roof span the whole level)
+    if (group.children.some((o) => !o.isInstancedMesh && bb.setFromObject(o).intersectsBox(vol) && !big(bb))) continue;
+    if (!reserve(stair)) continue;
+    for (let tx = ox; tx <= ox + 2; tx++) for (let ty = oy; ty <= oy + 1; ty++) h.used.add(tx + ',' + ty); // (walk under it; nothing gets put under it)
+    const x0b = ox * TILE, z0b = oy * TILE, wb = 3 * TILE, db = 2 * TILE, fy = 3.2, hy = 2.5;
+    const cxb = x0b + wb / 2, czb = z0b + db / 2;
+    put(mesh(box(wb, 0.2, db), dark), cxb, fy - 0.1, czb);
+    put(mesh(box(wb + 0.1, 0.12, db + 0.1), dark), cxb, fy + hy + 0.06, czb);
+    for (const [px, pz, len, yaw] of [[cxb, z0b, wb, Math.PI], [cxb, z0b + db, wb, 0], [x0b, czb, db, -Math.PI / 2], [x0b + wb, czb, db, Math.PI / 2]]) { // (yaw: facing out)
+      put(mesh(box(len, 1.0, 0.1), M.grey2), px, fy + 0.5, pz, yaw); // the panelling up to the sill
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(len - 0.2, 1.1), M.blinds);
+      put(win, px + Math.sin(yaw) * 0.06, fy + 1.6, pz + Math.cos(yaw) * 0.06, yaw);
+      put(mesh(box(len, 0.4, 0.1), M.grey2), px, fy + hy - 0.2, pz, yaw); // above the windows
+    }
+    for (const [tx, ty] of legs) { const lxp = tx === ox ? x0b + 0.2 : x0b + wb - 0.2, lzp = ty === oy ? z0b + 0.2 : z0b + db - 0.2; put(mesh(box(0.2, fy - 0.2, 0.2), M.grey2), lxp, (fy - 0.2) / 2, lzp); h.collider(lxp - 0.12, lzp - 0.12, lxp + 0.12, lzp + 0.12); }
+    // the stairs: up the side to a landing at the door
+    const sx0 = (ox + 3) * TILE, sz = (oy + 1) * TILE + 1.2;
+    for (let k = 0; k < 12; k++) put(mesh(box(0.3, 0.05, 0.9), M.galv), sx0 + 3.6 - k * 0.3, 0.27 * (k + 1), sz);
+    for (const s2 of [-0.47, 0.47]) { const st = mesh(box(4.4, 0.18, 0.05), red); st.rotation.z = -Math.atan2(3.2, 3.6); put(st, sx0 + 1.8, 1.65, sz + s2); }
+    for (const s2 of [-0.47, 0.47]) { const hr = mesh(box(4.6, 0.05, 0.05), red); hr.rotation.z = -Math.atan2(3.2, 3.6); put(hr, sx0 + 1.8, 2.6, sz + s2); }
+    break;
+  }
+
+  // the time clock by the lift, and the racks of cards beside it: most of the slots on the OUT side are empty
+  {
+    const tx = free(lx - 1, hi.bottom) ? lx - 1 : lx + 4, x = tc(tx);
+    if (free(tx, hi.bottom) && !L.grid[(hi.bottom + 1) * W + tx]) {
+      h.used.add(tx + ',' + hi.bottom);
+      const clock = new THREE.Group();
+      clock.add(mesh(box(0.42, 0.6, 0.24), M.clockBody));
+      const face = new THREE.Mesh(geo('clockFace', () => new THREE.CircleGeometry(0.13, 20)), M.clockFace); face.position.set(0, 0.12, 0.125); clock.add(face);
+      put(clock, x, 1.45, wallZ - 0.13, Math.PI);
+      for (const s2 of [-1, 1]) { const rack = new THREE.Mesh(geo('cardRack', () => new THREE.BoxGeometry(0.55, 1.1, 0.06)), s2 < 0 ? M.cardsIn : M.cardsOut); put(rack, x + s2 * 0.62, 1.45, wallZ - 0.04, Math.PI); }
+      for (let i = 0; i < 9; i++) { // cards on the floor in front of it
+        const c = new THREE.Mesh(geo('card', () => new THREE.PlaneGeometry(0.09, 0.18)), M.card);
+        c.rotation.set(-Math.PI / 2, 0, rng() * 6); c.position.set(x + (rng() - 0.5) * 1.6, 0.008 + i * 0.0004, wallZ - 0.4 - rng() * 1.2); c.renderOrder = 1;
+        group.add(c);
+      }
+    }
+  }
+
+  // the owner's office: a pin board, a notice about a farm, and an old photograph with a face scratched out of it
+  for (const r of L.rooms) {
+    if (r.type !== 'office' || !r.fixed) continue;
+    let spot = null;
+    for (let y = r.y; y < r.y + r.h && !spot; y++) for (let x = r.x; x < r.x + r.w && !spot; x++) {
+      if (h.used.has(x + ',' + y)) continue;
+      const sd = h.wallSides(x, y);
+      if (sd.length === 1) spot = [x, y, sd[0]];
+    }
+    if (!spot) continue;
+    const [tx, ty, [dx, dy]] = spot;
+    h.used.add(tx + ',' + ty);
+    const yaw = Math.atan2(-dx, -dy), bx = tc(tx) + dx * (TILE / 2 - 0.03), bz = tc(ty) + dy * (TILE / 2 - 0.03);
+    const board = new THREE.Group();
+    board.add(mesh(box(1.1, 0.75, 0.03), M.cork));
+    const letter = new THREE.Mesh(geo('letter', () => new THREE.PlaneGeometry(0.3, 0.4)), M.letter); letter.position.set(-0.22, 0.02, 0.02); letter.rotation.z = 0.04; board.add(letter);
+    const photo = new THREE.Mesh(geo('photo', () => new THREE.PlaneGeometry(0.28, 0.2)), M.photo); photo.position.set(0.28, 0.08, 0.02); photo.rotation.z = -0.07; board.add(photo);
+    for (const [px, py] of [[-0.22, 0.2], [0.28, 0.17]]) { const pin = mesh(geo('pin', () => new THREE.SphereGeometry(0.012, 6, 4)), red); pin.position.set(px, py, 0.03); board.add(pin); }
+    put(board, bx, 1.55, bz, yaw);
+    break;
+  }
+
   // ---- machines: a tall one in each work area that has the room, on four free floor tiles ----
   const machine = (kind) => {
     const g = new THREE.Group();
@@ -164,6 +288,8 @@ function dress(L, mats, group, out, h) {
   const drums = () => { const g = new THREE.Group(); const n = 2 + ((rng() * 3) | 0); for (let i = 0; i < n; i++) { const d = drum(rng() < 0.5 ? red : dark); d.position.set((i % 2) * 0.62 - 0.3, 0, (i >> 1) * 0.62 - 0.3); d.rotation.y = rng() * 6; g.add(d); } if (rng() < 0.3) { const d = drum(red); d.rotation.z = Math.PI / 2; d.position.set(0.1, 0.3, 0.55); g.add(d); } return g; };
   const wrapped = () => { const g = new THREE.Group(); const pal = mesh(box(1.2, 0.14, 1.0), M.wood); pal.position.y = 0.07; g.add(pal); const hgt = [0.8, 1.1, 1.4, 1.7][(rng() * 4) | 0]; const st = mesh(box(1.12, hgt, 0.94), M.wrap); st.position.y = 0.14 + hgt / 2; g.add(st); return g; };
   const cage = () => { const g = new THREE.Group(); for (const [x, z] of [[-0.4, -0.35], [0.4, -0.35], [-0.4, 0.35], [0.4, 0.35]]) { const p = mesh(box(0.04, 1.7, 0.04), steel); p.position.set(x, 0.95, z); g.add(p); } for (const y of [0.15, 0.6, 1.05, 1.5]) for (const z of [-0.35, 0.35]) { const r = mesh(box(0.84, 0.03, 0.03), steel); r.position.set(0, y, z); g.add(r); } const base = mesh(box(0.86, 0.06, 0.74), dark); base.position.y = 0.12; g.add(base); for (let i = 0; i < 2; i++) { const c2 = mesh(box(0.6, 0.4, 0.5), M.wrap); c2.position.set(0, 0.36 + i * 0.42, 0); g.add(c2); } return g; };
+  // export crates, stencilled with where they were going
+  const crates = () => { const g = new THREE.Group(); const n2 = 1 + ((rng() * 3) | 0); for (let i = 0; i < n2; i++) { const c = new THREE.Mesh(cellGeo(new THREE.BoxGeometry(1.25, 0.9, 1.0), (rng() * PORTS.length) | 0, M.crate.map.userData.grid), M.crate); c.position.set((rng() - 0.5) * 0.08, 0.45 + i * 0.9, (rng() - 0.5) * 0.08); c.rotation.y = (rng() - 0.5) * 0.12; g.add(c); } return g; };
   let forks = 0;
   for (let ri = 1; ri < L.rooms.length; ri++) {
     const r = L.rooms[ri];
@@ -179,7 +305,8 @@ function dress(L, mats, group, out, h) {
       const cx = tc(x), cz = tc(y), k = rng();
       let o;
       if (k < 0.12 && forks < 3 && P2) { o = P2.forklift(mats, rng); forks++; h.collider(cx - 0.6, cz - 1.0, cx + 0.6, cz + 1.0); put(o, cx, 0, cz, rng() < 0.5 ? 0 : Math.PI); }
-      else if (k < 0.45) { o = wrapped(); h.collider(cx - 0.62, cz - 0.52, cx + 0.62, cz + 0.52); put(o, cx, 0, cz, (rng() - 0.5) * 0.2); if (rng() < 0.5) { const o2 = wrapped(); put(o2, cx + (rng() - 0.5) * 0.1, 0, cz + 0, 0); o2.position.y = o.children[1].geometry.parameters.height + 0.14; } }
+      else if (k < 0.3) { o = crates(); h.collider(cx - 0.7, cz - 0.7, cx + 0.7, cz + 0.7); put(o, cx, 0, cz, (rng() < 0.5 ? 0 : Math.PI / 2) + (rng() - 0.5) * 0.15); }
+      else if (k < 0.5) { o = wrapped(); h.collider(cx - 0.62, cz - 0.52, cx + 0.62, cz + 0.52); put(o, cx, 0, cz, (rng() - 0.5) * 0.2); if (rng() < 0.5) { const o2 = wrapped(); put(o2, cx + (rng() - 0.5) * 0.1, 0, cz + 0, 0); o2.position.y = o.children[1].geometry.parameters.height + 0.14; } }
       else if (k < 0.75) { o = drums(); h.collider(cx - 0.65, cz - 0.65, cx + 0.65, cz + 0.65); put(o, cx, 0, cz, rng() * 6); }
       else { o = cage(); h.collider(cx - 0.45, cz - 0.4, cx + 0.45, cz + 0.4); put(o, cx, 0, cz, rng() * 6); }
       n++;
@@ -353,6 +480,59 @@ function drawSign(g, [a, b], seed) {
   let s = seed * 9301 + 49297; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
   for (let i = 0; i < 24; i++) { g.fillStyle = `rgba(90,80,70,${r() * 0.18})`; g.fillRect(r() * 1024, r() * 250, 2 + r() * 6, 20 + r() * 120); } // weather running down it
 }
+const PORTS = ['ROTTERDAM', 'YOKOHAMA', 'LIVERPOOL', 'SANTOS', 'HAMBURG', 'ANTWERP'];
+function drawCrate(g, port, i) { // pale pine, stencilled
+  g.fillStyle = '#a88a60'; g.fillRect(0, 0, 256, 192);
+  for (let y = 0; y < 192; y += 32) { g.fillStyle = `rgba(60,40,20,${0.12 + (i * 7 + y) % 5 * 0.03})`; g.fillRect(0, y, 256, 2); }
+  g.fillStyle = 'rgba(40,24,12,.5)'; g.fillRect(0, 0, 10, 192); g.fillRect(246, 0, 10, 192);
+  g.fillStyle = '#2a1e14'; g.textAlign = 'center'; g.font = 'bold 22px "Courier New", monospace'; g.fillText('HOLLOW PINES MEATWORKS', 128, 46);
+  g.font = 'bold 40px "Courier New", monospace'; g.fillText(port, 128, 104);
+  g.font = 'bold 18px "Courier New", monospace'; g.fillText('PERISHABLE · KEEP FROZEN', 128, 146);
+  g.fillStyle = '#7a1612'; g.fillText('EXPORT', 128, 172);
+}
+function drawTrailerDoor(g) { // a reefer's rear door: ribbed white, a lock bar, the plant's name
+  g.fillStyle = '#d6d6d0'; g.fillRect(0, 0, 256, 512);
+  for (let y = 20; y < 512; y += 40) { g.fillStyle = 'rgba(90,90,86,.35)'; g.fillRect(0, y, 256, 3); }
+  g.fillStyle = '#9a1612'; g.font = 'bold 30px Arial, sans-serif'; g.textAlign = 'center'; g.fillText('HOLLOW', 128, 150); g.fillText('PINES', 128, 186);
+  g.fillStyle = '#333'; g.font = 'bold 16px Arial, sans-serif'; g.fillText('REFRIGERATED', 128, 214);
+  g.fillStyle = '#5a5c5e'; g.fillRect(196, 40, 14, 440);
+  g.fillStyle = 'rgba(80,60,40,.25)'; for (let i = 0; i < 20; i++) g.fillRect(Math.random() * 256, 300 + Math.random() * 200, 2, 30 + Math.random() * 90);
+}
+function drawBlinds(g) { // lit from inside, through half-shut blinds; in one pane something hangs
+  g.fillStyle = '#2a2a22'; g.fillRect(0, 0, 512, 128);
+  const gr = g.createLinearGradient(0, 0, 512, 0); gr.addColorStop(0, 'rgba(200,190,150,.35)'); gr.addColorStop(0.5, 'rgba(220,210,170,.55)'); gr.addColorStop(1, 'rgba(180,170,140,.3)');
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 128);
+  g.fillStyle = '#16140f'; g.beginPath(); g.arc(370, 40, 9, 0, 7); g.fill(); g.fillRect(363, 48, 14, 46); g.fillRect(366, 92, 4, 30); g.fillRect(372, 92, 4, 30); g.fillRect(369, 0, 2, 32); // (something hangs there)
+  for (let y = 0; y < 128; y += 6) { g.fillStyle = 'rgba(30,28,22,.55)'; g.fillRect(0, y, 512, 3); }
+  for (let x = 0; x < 512; x += 128) { g.fillStyle = '#121210'; g.fillRect(x, 0, 6, 128); }
+}
+function drawCards(g, fill) { // two columns of punch cards in their slots; fill: how many are still there
+  g.fillStyle = '#5a5248'; g.fillRect(0, 0, 128, 256);
+  for (let r = 0; r < 12; r++) for (let c = 0; c < 2; c++) {
+    const x = 8 + c * 60, y = 8 + r * 20;
+    g.fillStyle = '#2a2622'; g.fillRect(x, y + 10, 52, 6);
+    if (((r * 7 + c * 3) % 10) / 10 < fill) { g.fillStyle = (r + c) % 9 === 4 ? '#b89a88' : '#d8ccb0'; g.fillRect(x + 4, y, 44, 14); g.fillStyle = '#4a4038'; g.fillRect(x + 8, y + 3, 26, 2); }
+  }
+}
+function drawLetter(g) { // typed, folded once, a stamp at the bottom
+  g.fillStyle = '#ebe5d6'; g.fillRect(0, 0, 300, 400);
+  g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, 196, 300, 3);
+  g.fillStyle = '#1e1c1a'; g.textAlign = 'left'; g.font = 'bold 15px "Courier New", monospace'; g.fillText('NOTICE OF DEMOLITION', 22, 44);
+  g.font = '11px "Courier New", monospace';
+  const L2 = ['Re: the farm property on Pines Road', '', 'The house, barns and outbuildings', 'on the above property, vacant these', 'forty years, are condemned and will', 'be demolished on 26 October 1998.', '', 'Any items you wish to recover must', 'be removed before that date. The', 'county accepts no responsibility', 'for anything left on the property.', '', 'Office of the County Surveyor'];
+  L2.forEach((l, i) => g.fillText(l, 22, 76 + i * 18));
+  g.strokeStyle = 'rgba(140,20,16,.75)'; g.lineWidth = 3; g.beginPath(); g.arc(224, 340, 34, 0, 7); g.stroke(); g.font = 'bold 10px Arial'; g.fillStyle = 'rgba(140,20,16,.8)'; g.textAlign = 'center'; g.fillText('RECEIVED', 224, 344);
+}
+function drawPhoto(g) { // a farmhouse, a family of four in front of it; the mother's face has been scratched away
+  g.fillStyle = '#efe6d2'; g.fillRect(0, 0, 280, 200);
+  const sepia = (a) => `rgba(70,52,34,${a})`;
+  g.fillStyle = '#b8a07c'; g.fillRect(12, 12, 256, 160);
+  g.fillStyle = sepia(0.5); g.fillRect(12, 110, 256, 62);
+  g.fillStyle = sepia(0.7); g.beginPath(); g.moveTo(150, 40); g.lineTo(230, 40); g.lineTo(250, 70); g.lineTo(130, 70); g.fill(); g.fillRect(140, 70, 100, 50); // the house
+  for (const [x, hgt, w] of [[60, 66, 16], [86, 62, 15], [112, 44, 12], [128, 40, 11]]) { g.fillStyle = sepia(0.85); g.fillRect(x - w / 2, 150 - hgt, w, hgt); g.beginPath(); g.arc(x, 150 - hgt - 8, w * 0.42, 0, 7); g.fill(); }
+  g.strokeStyle = '#efe6d2'; g.lineWidth = 2; for (let i = 0; i < 9; i++) { g.beginPath(); g.moveTo(80 + Math.random() * 10, 62 + Math.random() * 18); g.lineTo(80 + Math.random() * 12, 62 + Math.random() * 18); g.stroke(); }
+  g.fillStyle = sepia(0.6); g.font = 'italic 11px serif'; g.fillText('the farm, summer', 18, 190);
+}
 let MATS = null;
 function hallMats(mats) {
   if (MATS && MATS.src === mats) return MATS;
@@ -369,6 +549,20 @@ function hallMats(mats) {
     wrap: new THREE.MeshPhongMaterial({ color: 0xb4b0a8, shininess: 90, specular: 0x9a9a9a }), // (opaque: see-through film over every pallet cost too much)
     wrapMeat: new THREE.MeshPhongMaterial({ color: 0x8a2a24, shininess: 90, specular: 0x8a6a66 }),
     beacon: new THREE.MeshBasicMaterial({ color: 0xc81a10, transparent: true, opacity: 0.85 }),
+    trailer: new THREE.MeshPhongMaterial({ color: 0xc8c8c2, shininess: 40, specular: 0x666666 }),
+    trailerDoor: new THREE.MeshPhongMaterial({ map: cv(256, 512, drawTrailerDoor), shininess: 30 }),
+    reefFloor: new THREE.MeshPhongMaterial({ color: 0x4a2a24, shininess: 80, specular: 0x553333 }),
+    jamb: new THREE.MeshPhongMaterial({ map: cv(32, 256, (g) => { for (let y = 0; y < 256; y += 32) { g.fillStyle = '#b01a14'; g.fillRect(0, y, 32, 16); g.fillStyle = '#e4e0d8'; g.fillRect(0, y + 16, 32, 16); } }), shininess: 30 }),
+    blinds: new THREE.MeshBasicMaterial({ map: cv(512, 128, drawBlinds) }),
+    clockBody: new THREE.MeshPhongMaterial({ color: 0x8a8070, shininess: 30 }),
+    clockFace: new THREE.MeshBasicMaterial({ map: cv(64, 64, (g) => { g.fillStyle = '#e8e2d4'; g.beginPath(); g.arc(32, 32, 31, 0, 7); g.fill(); g.strokeStyle = '#222'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; g.beginPath(); g.moveTo(32 + Math.sin(a) * 25, 32 - Math.cos(a) * 25); g.lineTo(32 + Math.sin(a) * 29, 32 - Math.cos(a) * 29); g.stroke(); } g.lineWidth = 3; g.beginPath(); g.moveTo(32, 32); g.lineTo(32 + 14, 32 + 6); g.moveTo(32, 32); g.lineTo(32 - 3, 32 - 22); g.stroke(); }) }),
+    cardsIn: new THREE.MeshPhongMaterial({ map: cv(128, 256, (g) => drawCards(g, 0.95)) }),
+    cardsOut: new THREE.MeshPhongMaterial({ map: cv(128, 256, (g) => drawCards(g, 0.12)) }),
+    card: new THREE.MeshPhongMaterial({ color: 0xd8ccb0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+    cork: new THREE.MeshPhongMaterial({ color: 0x8a6440, shininess: 5 }),
+    letter: new THREE.MeshPhongMaterial({ map: cv(300, 400, drawLetter), shininess: 5 }),
+    photo: new THREE.MeshPhongMaterial({ map: cv(280, 200, drawPhoto), shininess: 40 }),
+    crate: new THREE.MeshPhongMaterial({ map: Object.assign(atlasTex(PORTS, 256, 192, drawCrate), {}), shininess: 5 }),
     beaconHot: new THREE.MeshBasicMaterial({ color: 0xff6a50 }),
     // a lane: red and white dashes
     lane: decal(cv(16, 64, (g) => { g.fillStyle = '#b01a14'; g.fillRect(0, 0, 16, 32); g.fillStyle = '#e4e0d8'; g.fillRect(0, 32, 16, 32); g.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < 40; i++) g.fillRect(Math.random() * 16, Math.random() * 64, 2, 1); })),
@@ -381,5 +575,6 @@ function hallMats(mats) {
       g.strokeStyle = '#e4e0d8'; g.lineWidth = 2; g.strokeRect(14, 14, 100, 100);
     })),
   };
+  MATS.crate.map.userData.floorOnly = false; // (kept with these materials from floor to floor, not freed with one)
   return MATS;
 }
