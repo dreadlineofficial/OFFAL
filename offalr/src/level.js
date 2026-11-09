@@ -7,6 +7,7 @@ export const CRAWL_H = 1.2; // the roof of a crouchway: you crouched fit (eyes a
 import { makeRng } from './rng.js';
 import * as P from './props.js';
 import * as P2 from './props2.js';
+import * as P3 from './props3.js';
 import { themeMaterials, TEX } from './textures.js';
 import { dressArchitecture } from './arch.js';
 
@@ -459,7 +460,7 @@ export function buildLevel(L, mats) {
     if (cc.p.length) group.add(P.mesh(cc.build(), mats.rust[1], false));
   }
   // every kind of floor has its own surfaces; the meatworks keeps the originals
-  const TM = themeMaterials(mats, L.depth === 0 && L.theme === 'offices' ? 'hiring' : L.theme || 'plant'); // (the hiring office: its own surfaces, not Administration's)
+  const TM = themeMaterials(mats, L.depth === 0 && L.theme === 'offices' ? 'hiring' : L.depth === 9 && (L.theme || 'plant') === 'plant' ? 'smokehouse' : L.theme || 'plant'); // (the hiring office: its own surfaces, not Administration's)
   for (const [k, g] of wallBufs) { const m = P.mesh(g.build(), TM ? TM.walls[Math.floor(k / 3)] : mats.walls[k], false); group.add(m); }
   for (const [k, g] of floorBufs) { const m = P.mesh(g.build(), TM ? TM.floors[k] : mats.floors[k], false); group.add(m); }
   group.add(P.mesh(ceil.build(), TM ? TM.ceil : mats.ceil, false));
@@ -568,6 +569,43 @@ export function buildLevel(L, mats) {
     const rx = r.x * TILE, rz = r.y * TILE, rw = r.w * TILE, rh = r.h * TILE;
     const inner = rng.shuffle(interior(r).filter(([x, y]) => !used.has(x + ',' + y)));
     switch (r.type) {
+      // ---- B9, the smokehouse (props3.js) ----
+      case 'smoke': { // a smoke chamber: racks of meat in rows, a firebox banked in the wall
+        const along = r.w >= r.h;
+        const spots = inner.filter(([x, y]) => (along ? y - r.y : x - r.x) % 2 === 1);
+        let n = 0;
+        for (const [x, y] of spots) {
+          if (n >= Math.max(2, Math.floor((r.w * r.h) / 6)) || !canBlock(x, y)) continue;
+          blockTile(x, y); n++;
+          const [cx, cz] = centerOf(x, y);
+          add(P3.smokeRack(mats, rng), cx, cz, along ? 0 : Math.PI / 2);
+          if (along) collider(cx - 1, cz - 0.4, cx + 1, cz + 0.4); else collider(cx - 0.4, cz - 1, cx + 0.4, cz + 1);
+        }
+        const f = wallSpot(r); if (f) onWall(P3.firebox(mats), f, 0.9, 1.3);
+        return true;
+      }
+      case 'vats': { // where the fat goes: two or three rendering vats, a ladder up each
+        let n = 0;
+        for (const [x, y] of inner) {
+          if (n >= Math.min(3, Math.max(1, Math.floor((r.w * r.h) / 8))) || !canBlock(x, y)) continue;
+          blockTile(x, y); n++;
+          const [cx, cz] = centerOf(x, y);
+          add(P3.renderVat(mats, rng), cx, cz, rng() * 6.28);
+          collider(cx - 0.9, cz - 0.9, cx + 0.9, cz + 0.9);
+        }
+        for (let i = 0; i < 2; i++) out.swingers.push(add(P.hangingChain(mats, rng), rx + 1 + rng() * (rw - 2), rz + 1 + rng() * (rh - 2)));
+        return true;
+      }
+      case 'bunks': { // where the night shift slept, when they stopped being let up
+        for (let i = 0; i < Math.min(4, 1 + Math.floor((r.w * r.h) / 6)); i++) { const b = wallSpot(r, (x, y, [dx, dy]) => wallSides(x, y).length === 1); if (b) onWall(P3.bunkBed(mats, rng), b, 0.95, 1.95); }
+        return true;
+      }
+      case 'shrine': { // the shrine to the missing
+        const sp = wallSpot(r, (x, y) => wallSides(x, y).length === 1) || wallSpot(r);
+        if (sp) onWall(P3.shrine(mats, rng), sp, 0.6, 1.5);
+        const b = wallSpot(r, (x, y) => wallSides(x, y).length === 1); if (b) onWall(P3.bunkBed(mats, rng), b, 0.95, 1.95);
+        return true;
+      }
       // ---- the hospital wing ----
       case 'autopsy': {
         for (const [x, y] of inner.filter(([x, y]) => canBlock(x, y)).slice(0, r.w * r.h >= 15 ? 2 : 1)) {

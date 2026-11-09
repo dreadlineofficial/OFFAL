@@ -39,8 +39,8 @@ const STORY = [
     size: 50, rooms: 14, tags: 6, hunters: 2, puzzles: ['scale', 'keypad'] },
   { name: 'DEEP FREEZE', quote: 'Minus twenty. The meat is racked to the ceiling, and some of it is wrapped like people.', lamp: 0xd8ecff, fog: 0x0c1014, theme: 'freezer',
     size: 52, rooms: 16, tags: 6, hunters: 2, puzzles: ['meatkey'] },
-  { name: 'THE QUIET LINE', quote: 'You can hear the line running below you now. It sounds like breathing.', lamp: 0xd0c0a0, fog: 0x030201,
-    size: 54, rooms: 17, tags: 6, hunters: 2, puzzles: ['hooks'], deadLamps: 0.55, pool: ['line', 'hanging', 'line', 'lockers', 'pit', 'hanging'], glass: 0.14 }, // the line overhead; glass underfoot
+  { name: 'THE QUIET LINE', quote: 'Everything the line made ends up in the smokehouse. The fires never went out.', lamp: 0xffa860, fog: 0x0a0503,
+    size: 54, rooms: 17, tags: 6, hunters: 2, puzzles: ['hooks'], deadLamps: 0.5, pool: ['smoke', 'vats', 'line', 'bunks', 'shrine', 'hanging', 'smoke', 'vats', 'lockers', 'pit', 'smoke', 'bunks'], glass: 0.14 }, // the smokehouse: smoke chambers, rendering vats, bunks, a shrine; glass underfoot
   { name: 'THE LINE', quote: 'This is where it all goes. Stop the line, and the shift is over.', lamp: 0xff4030, fog: 0x080000,
     size: 46, rooms: 13, tags: 0, hunters: 2, puzzles: ['breakers'], finale: true },
 ];

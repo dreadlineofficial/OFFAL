@@ -576,6 +576,35 @@ function hiringFloorCanvas(kind) {
   speckle(g, S, S, 16, rng);
   return c;
 }
+// B9, the smokehouse: old brick blackened to the ceiling, fat run down it and set, the plaster long gone
+function smokeWallCanvas(gore) {
+  const W = 256, H = 384, { c, g } = hq(W, H), rng = makeRng(1201 + gore * 9);
+  g.fillStyle = '#1e1410'; g.fillRect(0, 0, W, H);
+  for (let y = 0, row = 0; y < H; y += 20, row++) for (let x = row % 2 ? -20 : 0; x < W; x += 40) {
+    const v = rng(); g.fillStyle = `rgb(${62 + v * 34 | 0},${30 + v * 14 | 0},${20 + v * 10 | 0})`; g.fillRect(x + 2, y + 2, 36, 16);
+  }
+  const soot = g.createLinearGradient(0, 0, 0, H); soot.addColorStop(0, 'rgba(6,4,2,.92)'); soot.addColorStop(0.55, 'rgba(10,6,4,.55)'); soot.addColorStop(1, 'rgba(10,6,4,.25)');
+  g.fillStyle = soot; g.fillRect(0, 0, W, H); // black from the top down, where the smoke sat
+  for (let i = 0; i < 26; i++) { const x = rng() * W, y = rng() * H * 0.5, len = 40 + rng() * 160; const gr = g.createLinearGradient(0, y, 0, y + len); gr.addColorStop(0, 'rgba(200,170,90,.35)'); gr.addColorStop(1, 'rgba(200,170,90,0)'); g.fillStyle = gr; g.fillRect(x, y, 2 + rng() * 4, len); } // fat, run down and set
+  blotches(g, W, H, 40, 6, 30, '0,0,0', 0.3, rng);
+  g.fillStyle = '#0c0806'; g.fillRect(0, H - 16, W, 16);
+  wallBlood(g, W, H, gore, rng);
+  speckle(g, W, H, 14, rng);
+  return c;
+}
+// its floor: black concrete under ash and a skin of tallow, a drain channel, footprints where it's been walked
+function smokeFloorCanvas(kind) {
+  const S = 256, { c, g } = hq(S, S), rng = makeRng(1221 + kind * 7);
+  g.fillStyle = '#262220'; g.fillRect(0, 0, S, S);
+  blotches(g, S, S, 120, 4, 30, '60,56,50', 0.35, rng); // ash
+  for (let i = 0; i < 7; i++) { const x = rng() * S, y = rng() * S, r = 20 + rng() * 50; const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(190,170,110,${0.1 + rng() * 0.12})`); gr.addColorStop(1, 'rgba(190,170,110,0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); } // tallow, set in thin pools that fade at the edges
+  for (let i = 0; i < 10; i++) { const y = 20 + i * 24, x = S * 0.62 + (i % 2 ? 9 : -9); g.fillStyle = 'rgba(10,8,6,.35)'; g.beginPath(); g.ellipse(x, y, 4, 9, 0, 0, TAU); g.fill(); } // one line of footprints through it
+  if (kind === 2) { g.fillStyle = '#121010'; g.fillRect(S / 2 - 10, 0, 20, S); g.fillStyle = '#060404'; for (let y = 0; y < S; y += 10) g.fillRect(S / 2 - 8, y, 16, 5); }
+  if (kind === 1) bloodPool(g, S / 2, S / 2, 40, rng);
+  g.fillStyle = 'rgba(255,230,180,.05)'; for (let i = 0; i < 50; i++) g.fillRect(rng() * S, rng() * S, 2 + rng() * 12, 1); // greasy sheen
+  speckle(g, S, S, 14, rng);
+  return c;
+}
 // carpet tiles: blue-grey, each laid at right angles to the next, trodden into paths
 function officeFloorCanvas(kind) {
   const S = 256, { c, g } = hq(S, S), rng = makeRng(641 + kind * 3);
@@ -766,6 +795,7 @@ export function themeMaterials(mats, theme) {
   let m;
   if (theme === 'morgue') m = { walls: wall(wardWallCanvas, 60, 0x445048, 0.8), floors: floor(wardFloorCanvas, 70, 0x333833), ceil: phong({ map: tx(dropCeiling(951, [190, 188, 172], '#4e4c44')), shininess: 4 }, CEIL_P) };
   else if (theme === 'offices') m = { walls: wall(officeWallCanvas, 8, 0x111111), floors: floor(officeFloorCanvas, 2, 0x000000), ceil: phong({ map: tx(dropCeiling(661, [168, 160, 136], '#3e3a30')), shininess: 4 }, CEIL_P) };
+  else if (theme === 'smokehouse') m = { walls: wall(smokeWallCanvas, 70, 0x3a2a18, 1.4), floors: floor(smokeFloorCanvas, 100, 0x3a3020), ceil: phong({ map: tx(factoryCeilCanvas()), shininess: 20, specular: 0x111111 }, CEIL_P) };
   else if (theme === 'hiring') m = { walls: wall(hiringWallCanvas, 30, 0x222a22, 1.0), floors: floor(hiringFloorCanvas, 90, 0x333028), ceil: phong({ map: tx(dropCeiling(977, [150, 156, 140], '#2e3430')), shininess: 4 }, CEIL_P) };
   else if (theme === 'sewer') m = { walls: wall(sewerWallCanvas, 70, 0x334422, 2), floors: floor(sewerFloorCanvas, 110, 0x445533), ceil: phong({ map: tx(sewerCeilCanvas()), shininess: 30, specular: 0x222222 }, CEIL_P) };
   else if (theme === 'processing') m = { walls: wall(factoryWallCanvas, 30, 0x2a2a22, 1.4), floors: floor(factoryFloorCanvas, 90, 0x4a2a22), ceil: phong({ map: tx(factoryCeilCanvas()), shininess: 30, specular: 0x222222 }, CEIL_P) };
