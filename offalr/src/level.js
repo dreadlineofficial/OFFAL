@@ -252,6 +252,7 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     : theme === 'sewer' ? standardRooms(c, D.rooms, { size: () => { const k = rng.int(3, 5); return [k, k + rng.int(-1, 1)]; }, meander: true, extra: 0.6 })
     : theme === 'processing' ? standardRooms(c, D.rooms, { size: (i) => (i < 4 ? [rng.int(9, 13), rng.int(5, 7)] : [rng.int(4, 6), rng.int(3, 5)]), wide: true, extra: 0.45 })
     : theme === 'freezer' ? standardRooms(c, Math.max(5, Math.round(D.rooms * 0.6)), { size: () => [rng.int(7, 11), rng.int(6, 9)], wide: true, extra: 0.5 })
+    : D.big ? standardRooms(c, D.rooms, { size: (i) => (i < 7 ? [rng.int(9, 13), rng.int(7, 10)] : [rng.int(5, 8), rng.int(4, 7)]), extra: 0.25 }) // B10: halls
     : standardRooms(c, D.rooms, { size: () => [rng.int(3, 7), rng.int(3, 6)], extra: c.keypad ? 0.2 : 0.45 });
   grid[ay * W + ax] = 1;
 

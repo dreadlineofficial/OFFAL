@@ -79,6 +79,15 @@ node tools/regress-offalr.mjs             # regression, needs the dev server; mu
 
 ## Current state (Nov 2026, v1.0.0)
 Done recently:
+- B10 rebuilt: 62 tiles, 20 big halls (`big`), and a chain (`chain`): fuses → keypad (wing) → kill switches (one in
+  the wing) → valves → `Override` (line control desk, far room) unlocks the lift; frenzy only after the override (4 s
+  head start). Later jobs show "LOCKED — FIRST: …"; notes/wall writing readable any time. Old B10 saves restart B10.
+- Textures vanishing: every 2D canvas forced CPU-backed in `three-r.js` (GPU canvases got blanked → black
+  normal/AO maps → dark walls); env map rebuilt on WebGL context restore.
+- Intro freeze: card shows before the build; death film a frame later; textures uploaded few-per-frame
+  (`uploadSoon`); play waits for shaders+textures. Sheet stains use gradients not blur (build 20 s → 3 s headless).
+  Sync test loops must set `o.G.warming = false` while calling `updateTransition`.
+- Tape: black cards (white text, red key line), each card cuts 0.6 s after the voice ends.
 - PA announcements removed; tag messages are "Pulled out a tag."; locker body only on B2/B5/B8/B11.
 - Touching the Foreman = caught. Floor bodies' legs no longer cross (X). Scale KG label hides when taken.
 - Less gore setting (organs/limbs hidden, closed chests, films limited to exit/beaten/smoke, little blood).

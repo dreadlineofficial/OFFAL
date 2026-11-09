@@ -509,7 +509,9 @@ function startRun(mode = 'story', fresh = false, diff = null, opts = {}) {
   G.runTags = mode === 'story' ? st.tags : 0;
   G.fear = G.scare = G.damage = G.flash = G.blackout = 0;
   writeSave();
-  const snap = opts.resume || null;
+  let snap = opts.resume || null;
+  // B10 was rebuilt (a bigger floor, a chain of jobs): a save from the old one starts the new one from the lift
+  if (snap && snap.mode === 'story' && snap.depth === STORY_FLOORS && snap.b10 !== 2) snap = null;
   if (snap) { G.diff = snap.diff; G.runTime = snap.runTime; G.runTags = snap.runTags; }
   else save.snap = null;
   G.trans = { t: 0.8, loaded: false, next: snap ? snap.depth : mode === 'story' ? st.floor : opts.floor || 1, snap };
@@ -942,7 +944,7 @@ function snapshot() {
   if (!G.B || G.mode === 'hunt' || !['play', 'paused'].includes(G.state) || ['closing', 'sealed'].includes(G.lift.phase)) return null;
   const B = G.B;
   return {
-    v: 1, mode: G.mode, diff: G.diff, depth: G.depth, seed: G.floorSeed, at: Date.now(),
+    v: 1, b10: 2, mode: G.mode, diff: G.diff, depth: G.depth, seed: G.floorSeed, at: Date.now(),
     runTime: G.runTime, runTags: G.runTags, floorTime: G.floorTime,
     p: { x: player.pos.x, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, tags: player.tags, battery: player.battery, stamina: player.stamina,
       adrenaline: player.adrenaline, light: player.lightOn, crouch: player.crouch, locker: player.hidden ? B.lockers.indexOf(player.hidden) : -1 },

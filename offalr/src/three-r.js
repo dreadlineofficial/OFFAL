@@ -12,12 +12,12 @@ export * from '../../vendor/three/build/three.module.min.js';
 // is a black or see-through texture (walls going dark, normal/AO maps zeroed); reading one back to derive its
 // PBR maps also stalled each floor's build for seconds (getImageData waits on the GPU). Set before anything paints
 try {
-  const P = HTMLCanvasElement.prototype, get = P.getContext;
+  const P = globalThis.HTMLCanvasElement.prototype, get = P.getContext;
   P.getContext = function (type, opts) {
     return type === '2d' ? get.call(this, type, { ...(opts || {}), willReadFrequently: true }) : get.call(this, type, opts);
   };
   if (globalThis.OffscreenCanvas) {
-    const O = OffscreenCanvas.prototype, oget = O.getContext;
+    const O = globalThis.OffscreenCanvas.prototype, oget = O.getContext;
     O.getContext = function (type, opts) { return type === '2d' ? oget.call(this, type, { ...(opts || {}), willReadFrequently: true }) : oget.call(this, type, opts); };
   }
 } catch {}

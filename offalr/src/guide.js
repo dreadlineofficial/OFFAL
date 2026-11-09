@@ -21,7 +21,9 @@ const BRIEF = {
   sluices: 'The drains. The lift sits in a flooded sump, and it will not move until it is drained.\n\nFind the three sluice gates and wrench them open (hold E). Wading is loud: every step in the water splashes. It gets quieter as the water goes down.',
   keycard: 'Administration. The lift up here only answers to management.\n\nOne of the managers’ desks has a keycard in it. Go through the drawers (hold E). Every desk you search rattles.',
   meatkey: 'The deep freeze. The lift cage is padlocked, and the key was hung up with the meat.\n\nCut open the wrapped carcasses (hold E) until you find it. It is cold enough down here that you get your breath back slower.',
-  breakers: 'This is the bottom. The line is still running.\n\nPull the three kill switches to stop it. The first one sets off the alarm. When the line stops, both of them will come for you. Get back to the lift and go UP.',
+  override: 'The line has stopped and the brake is off. One thing left: the master override in line control, at the far end of the floor.\n\nHold E on the lever. Everything will go off at once, and both of them will know where you are. Then run for the lift.',
+  breakers: 'The power is on and the line is running again.\n\nPull the three kill switches to stop it. One of them is in the wing behind the shutter. The first one sets off the alarm, and they will hear every one.',
+  bottom: 'This is the bottom. The lift here goes UP, and nothing on this floor works.\n\nPower, then the shutter, then the line, then the brake, then the override: each job needs the one before it. TAB lists them. Notes and writing on the walls can be read any time.',
 };
 
 // a puzzle's title cut down to its first clause and its count: 'LOAD THE SCALE — AT LEAST <b>32 KG</b>' -> 'LOAD THE SCALE <b>32 KG</b>'
@@ -155,7 +157,8 @@ export class Guide {
     // the briefing
     if (G.depth === 1 && G.floorTime > 2.5) this.brief('start');
     if (G.depth === 1 && G.floorTime > 3) this.brief('adrenaline');
-    if (G.floorTime > 3) for (const p of pz.list) this.brief(p.kind);
+    if (G.D.chain && G.floorTime > 2.5) this.brief('bottom');
+    if (G.floorTime > 3) for (const p of pz.chain ? [pz.step].filter(Boolean) : pz.list) this.brief(p.kind); // (the finale: each job as you come to it)
     if (this.shown.has('start') && !this.shown.has('near')) {
       if (B.corpses.some((c) => !c.harvested && Math.hypot(c.pos.x - pl.pos.x, c.pos.z - pl.pos.z) < 5)) this.brief('near');
     }

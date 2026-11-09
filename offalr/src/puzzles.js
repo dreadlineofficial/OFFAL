@@ -10,6 +10,9 @@
 //   bolts    - stunning: the lift's latch is jammed; of the bolt guns on their hooks one is still warm (it works):
 //              find it and put a bolt through the latch (loud)
 //   hooks    - the quiet line: the chain brake on the lift has no crank; it went up the line on one of the bodies
+//   override - the finale's last job: the master override in line control, which unlocks the lift to go up
+// On the finale (D.chain) the jobs are one chain: each one is dead until the one before it is done (the notes and the
+// writing on the walls can still be read early).
 // Every puzzle gives main.js its interactions, the Q-listen arrow its targets, and the HUD its lines.
 import * as THREE from 'three';
 import { TILE, WALL_H } from './config.js';
@@ -134,7 +137,8 @@ class Fuses {
     // the fuses were hidden in the dead
     this.bags = [];
     for (let i = 0; i < n + 1; i++) { // one spare bag: one of them is empty
-      const t = B.takeTile(([x, y, ri]) => G.L.rooms[ri].type === 'morgue' || rng() < 0.5) || B.takeTile();
+      const t = ctx.chain ? B.takeTile(([x, y, ri]) => !B.inWing(x, y) && (G.L.rooms[ri].type === 'morgue' || rng() < 0.5)) || B.takeTile(([x, y]) => !B.inWing(x, y))
+        : B.takeTile(([x, y, ri]) => G.L.rooms[ri].type === 'morgue' || rng() < 0.5) || B.takeTile();
       if (!t) break;
       const x = tileCenter(t[0]) + (rng() - 0.5) * 0.6, z = tileCenter(t[1]) + (rng() - 0.5) * 0.6;
       const bag = add(P.bodyBag(mats, rng), x, z, rng() * 6);
@@ -299,7 +303,7 @@ class Keypad {
   }
   line() { return this.opened ? null : `SHUTTER CODE ${this.known.map((k) => (k === null ? '_' : k)).join(' ')}`; }
   title() { return 'FIND THE SHUTTER CODE'; }
-  liftMsg() { return null; }
+  liftMsg() { return this.ctx.chain ? 'LOCKED \u2014 OPEN THE SHUTTER FIRST' : null; }
   solve() { this.load({ ...this.save(), read: this.notes.map(() => true), opened: true }); }
   save() { return { read: this.notes.map((n) => n.read), opened: this.opened }; }
   load(s) {
@@ -576,6 +580,11 @@ class Breakers {
     const L = G.L;
     const far = L.rooms.map((r, ri) => [L.dist[r.cy * L.W + r.cx], ri]).filter(([, ri]) => ri > 0).sort((a, b) => b[0] - a[0]);
     const want = [far[0], far[Math.floor(far.length / 3)], far[Math.floor(far.length / 2)]].map((f) => f[1]);
+    // the finale: one of them is behind the shutter, and the others well apart
+    if (ctx.chain && L.wing) {
+      const inW = far.filter(([, ri]) => L.wing.rooms.includes(ri)), out = far.filter(([, ri]) => !L.wing.rooms.includes(ri));
+      if (inW.length && out.length > 2) want.splice(0, 3, inW[0][1], out[0][1], out[Math.floor(out.length / 2)][1]);
+    }
     this.switches = [];
     for (const ri of want) {
       const spot = B.takeWall(([, , , r]) => r === ri) || B.takeWall();
@@ -624,8 +633,8 @@ class Breakers {
     }
     if (this.solved) {
       G.audio.lineRunning(false);
-      G.frenzy = true;
-      UI.message('The line stops. They both heard that. GET TO THE LIFT.', 5);
+      if (this.ctx.chain) UI.message('The line stops. The lift still won’t go: steam has the brake locked.', 5);
+      else { G.frenzy = true; UI.message('The line stops. They both heard that. GET TO THE LIFT.', 5); }
     } else UI.message(`${this.switches.length - this.pulled} more. The alarm is screaming.`, 3);
   }
   goals() { return this.switches.filter((s) => !s.pulled).map((s) => s.pos); }
@@ -635,14 +644,14 @@ class Breakers {
   solve() {
     const G = this.ctx.G;
     for (const s of this.switches) if (!s.pulled) { s.pulled = true; s.lever.rotation.z = -0.6; s.lamp.material.color.setHex(0x30ff50); this.pulled++; }
-    G.audio.siren(true); G.audio.lineRunning(false); G.frenzy = true;
+    G.audio.siren(true); G.audio.lineRunning(false); if (!this.ctx.chain) G.frenzy = true;
   }
   save() { return { pulled: this.switches.map((s) => s.pulled) }; }
   load(st) {
     const G = this.ctx.G;
     st.pulled.forEach((p, i) => { const s = this.switches[i]; if (p && s) { s.pulled = true; s.lever.rotation.z = -0.6; s.lamp.material.color.setHex(0x30ff50); this.pulled++; } });
     if (this.pulled > 0) G.audio.siren(true);
-    if (this.solved) { G.audio.lineRunning(false); G.frenzy = true; }
+    if (this.solved) { G.audio.lineRunning(false); if (!this.ctx.chain) G.frenzy = true; }
   }
   dispose() { this.ctx.G.audio.lineRunning(false); this.ctx.G.audio.siren(false); }
 }
@@ -1163,7 +1172,96 @@ class Notice {
   load(s) { this.read = !!s.read; this.got = !!s.got || this.read; this.tape.visible = !this.got; }
 }
 
-const KINDS = { notice: Notice, fuses: Fuses, keypad: Keypad, scale: Scale, valves: Valves, breakers: Breakers, drawers: Drawers, sluices: Sluices, keycard: Keycard, meatkey: MeatKey, bolts: Bolts, hooks: Hooks };
+// the finale's last job: the master override in line control. Everything before it in the chain has to be done; it
+// unlocks the lift, and every light and siren on the floor comes on with it: both of them know where you are now
+class Override {
+  constructor(ctx) {
+    const { G, B, mats, add } = ctx;
+    this.kind = 'override';
+    this.gates = true;
+    this.ctx = ctx;
+    this.done = false;
+    const L = G.L;
+    // the room furthest from the lift (not behind the shutter, so it's the long way back)
+    const far = L.rooms.map((r, ri) => [L.dist[r.cy * L.W + r.cx], ri]).filter(([d, ri]) => ri > 0 && d > 0 && !(L.wing && L.wing.rooms.includes(ri))).sort((a, b) => b[0] - a[0]);
+    const room = far.length ? far[0][1] : -1;
+    const spot = B.takeWall(([, , , ri]) => ri === room) || B.takeWall(([x, y]) => !B.inWing(x, y)) || B.takeWall();
+    const w = onWall(spot[0], spot[1], spot[2], 0, 0.36);
+    const g = new THREE.Group();
+    // a control desk against the wall: steel cabinet, sloped panel, gauges, three dead lamps, and the big lever
+    const steel = mats.darkMetal, paint = new THREE.MeshPhongMaterial({ color: 0x3a3f36, shininess: 25, specular: 0x222222 });
+    const cab = P.mesh(new THREE.BoxGeometry(1.5, 0.95, 0.6), paint); cab.position.set(0, 0.475, 0); g.add(cab);
+    const top = P.mesh(new THREE.BoxGeometry(1.5, 0.06, 0.5), steel); top.position.set(0, 1.06, -0.06); top.rotation.x = 0.45; g.add(top);
+    const back = P.mesh(new THREE.BoxGeometry(1.5, 0.8, 0.12), paint); back.position.set(0, 1.45, -0.26); g.add(back);
+    const kick = P.mesh(new THREE.BoxGeometry(1.46, 0.08, 0.04), steel, false); kick.position.set(0, 0.05, 0.3); g.add(kick);
+    for (let i = 0; i < 3; i++) {
+      const gauge = P.mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 20), steel, false);
+      gauge.rotation.x = Math.PI / 2; gauge.position.set(-0.5 + i * 0.25, 1.52, -0.19); g.add(gauge);
+      const face = P.mesh(new THREE.CircleGeometry(0.075, 20), new THREE.MeshPhongMaterial({ color: 0xd8d0b8 }), false);
+      face.position.set(-0.5 + i * 0.25, 1.52, -0.173); g.add(face);
+      const needle = P.mesh(new THREE.BoxGeometry(0.006, 0.065, 0.004), new THREE.MeshBasicMaterial({ color: 0x8a0a06 }), false);
+      needle.position.set(-0.5 + i * 0.25, 1.52, -0.17); needle.rotation.z = -1.1 + i * 0.6; g.add(needle);
+    }
+    this.lamps = [];
+    for (let i = 0; i < 4; i++) {
+      const l = P.mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0x401008, fog: false }), false);
+      l.position.set(-0.55 + i * 0.12, 1.09, 0.03); g.add(l); this.lamps.push(l);
+    }
+    const sign = plainTex(256, 64, (g2) => {
+      g2.fillStyle = '#c8a020'; g2.fillRect(0, 0, 256, 64);
+      for (let k = -2; k < 18; k++) { g2.fillStyle = '#111'; g2.beginPath(); g2.moveTo(k * 16, 0); g2.lineTo(k * 16 + 8, 0); g2.lineTo(k * 16 - 4, 12); g2.lineTo(k * 16 - 12, 12); g2.fill(); }
+      g2.fillStyle = '#111'; g2.font = 'bold 22px "Courier New", monospace'; g2.textAlign = 'center';
+      g2.fillText('LINE CONTROL', 128, 34); g2.font = 'bold 15px "Courier New", monospace'; g2.fillText('MASTER OVERRIDE \u00B7 LIFT', 128, 54);
+    });
+    const plate = plane(0.7, 0.175, new THREE.MeshBasicMaterial({ map: sign.tex })); plate.position.set(0, 1.78, -0.195); g.add(plate);
+    // the lever: up (locked) to down (unlocked)
+    const lever = new THREE.Group(); lever.position.set(0.45, 1.12, 0.02);
+    const pivot = P.mesh(new THREE.BoxGeometry(0.14, 0.1, 0.1), steel, false); lever.add(pivot);
+    const arm = P.mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 8), steel, false); arm.position.y = 0.21; lever.add(arm);
+    const grip = P.mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.12, 10), new THREE.MeshPhongMaterial({ color: 0x8a0a06, shininess: 40 }), false);
+    grip.rotation.z = Math.PI / 2; grip.position.y = 0.43; lever.add(grip);
+    lever.rotation.x = -0.5; g.add(lever);
+    this.lever = lever;
+    g.position.set(w.pos.x, 0, w.pos.z);
+    g.rotation.y = w.yaw;
+    add(g);
+    this.pos = new THREE.Vector3(w.pos.x, 1.1, w.pos.z);
+  }
+  get solved() { return this.done; }
+  interactables() {
+    if (this.done) return [];
+    return [{ pos: this.pos, range: 2, minFacing: 0.35, hold: 5, tick: 'clank', noise: 16, label: 'HOLD \u2014 MASTER OVERRIDE: UNLOCK THE LIFT', use: () => this.fire() }];
+  }
+  show() {
+    this.lever.rotation.x = 0.9;
+    for (const l of this.lamps) l.material.color.setHex(0x30ff50);
+  }
+  fire() {
+    const G = this.ctx.G;
+    this.done = true;
+    this.show();
+    G.audio.breaker(this.pos);
+    G.audio.powerOn(this.pos);
+    G.audio.siren(true);
+    G.noise(this.pos, 999, true);
+    G.scare = 1;
+    G.flash = 0.5;
+    G.player.shake = 1;
+    G.frenzy = true;
+    G.frenzyT = 4; // a head start: then they know where you are
+    for (const l of G.B.lamps) if (l.state === 'dead') l.state = 'flicker';
+    UI.message('The lift is unlocked. Every alarm on the floor just went off. They both know where you are. RUN.', 6);
+  }
+  goals() { return this.done ? [] : [this.pos]; }
+  line() { return this.done ? null : 'MASTER OVERRIDE: LINE CONTROL'; }
+  title() { return 'UNLOCK THE LIFT \u2014 THE MASTER OVERRIDE'; }
+  liftMsg() { return 'LOCKED \u2014 THE MASTER OVERRIDE IS IN LINE CONTROL'; }
+  solve() { this.done = true; this.show(); this.ctx.G.frenzy = true; }
+  save() { return { done: this.done }; }
+  load(s) { if (s.done) { this.done = true; this.show(); this.ctx.G.frenzy = true; this.ctx.G.audio.siren(true); } }
+}
+
+const KINDS = { override: Override, notice: Notice, fuses: Fuses, keypad: Keypad, scale: Scale, valves: Valves, breakers: Breakers, drawers: Drawers, sluices: Sluices, keycard: Keycard, meatkey: MeatKey, bolts: Bolts, hooks: Hooks };
 
 export class Puzzles {
   constructor(G, kinds, seed) {
@@ -1172,16 +1270,32 @@ export class Puzzles {
     let maxDist = 0;
     for (const d of G.L.dist) if (d > maxDist) maxDist = d;
     const add = (o, x, z, yaw) => { if (x !== undefined) { o.position.x = x; o.position.z = z; } if (yaw !== undefined) o.rotation.y = yaw; B.group.add(o); return o; };
-    const ctx = { G, B, mats: G.mats, rng, add, maxDist };
+    const ctx = { G, B, mats: G.mats, rng, add, maxDist, chain: !!G.D.chain };
     // keypad first: it needs walls on its own side of the shutter before anything else takes them
     const order = kinds.slice().sort((a, b) => (a === 'keypad' ? -1 : b === 'keypad' ? 1 : 0));
     this.list = order.map((k) => new KINDS[k](ctx, k === 'fuses' ? (G.depth >= 5 ? 4 : 3) : undefined));
+    // the finale's chain: listed (and done) in the floor's own order, and every one of them holds the lift
+    this.chain = ctx.chain;
+    if (this.chain) { this.list.sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind)); for (const p of this.list) p.gates = true; }
   }
+  // the job you're on (the chain only): the first one not done
+  get step() { return this.chain ? this.list.find((p) => !p.solved) || null : null; }
   get ready() { return this.list.every((p) => !p.gates || p.solved); }
-  interactables() { return this.list.flatMap((p) => p.interactables()); }
-  goals() { return this.list.flatMap((p) => p.goals()); }
-  lines() { return this.list.map((p) => p.line()).filter(Boolean); }
-  blocker() { return this.list.find((p) => p.gates && !p.solved) || null; }
+  interactables() {
+    if (!this.chain) return this.list.flatMap((p) => p.interactables());
+    const cur = this.step;
+    let past = false;
+    return this.list.flatMap((p) => {
+      if (p === cur) { past = true; return p.interactables(); }
+      if (!past) return p.interactables();
+      // a job further down the chain: what's written can be read now; the rest is dead, and says what comes first
+      const why = 'LOCKED \u2014 FIRST: ' + cur.title().replace(/<[^>]+>/g, '');
+      return p.interactables().map((it) => (/^READ /.test(it.label) ? it : { pos: it.pos, range: it.range, minFacing: it.minFacing, label: why }));
+    });
+  }
+  goals() { return this.chain ? (this.step ? this.step.goals() : []) : this.list.flatMap((p) => p.goals()); }
+  lines() { return (this.chain ? [this.step].filter(Boolean) : this.list).map((p) => p.line()).filter(Boolean); }
+  blocker() { return this.chain ? this.step : this.list.find((p) => p.gates && !p.solved) || null; }
   update(dt) { for (const p of this.list) if (p.update) p.update(dt); }
   dispose() { for (const p of this.list) if (p.dispose) p.dispose(); }
   get(kind) { return this.list.find((p) => p.kind === kind); }

@@ -49,6 +49,13 @@ for (const id of ['rope', 'exit', 'grinder', 'fan', 'eaten', 'rack', 'process'])
     while (!done && k++ < 1200) done = cs.update(1 / 30); const t = cs.t; cs.dispose(); o.G.replay = null; o.G.state = 'menu'; return { ok: done, info: t.toFixed(1) + 's' };`), id);
 }
 // (Play as the Foreman is gone from the game)
+await check('B10: jobs unlock one after another', new Function(`const enter = ${enter}; enter('story', 10); const o = window.__offal, pz = o.G.puzzles;
+  const order = pz.list.map((x) => x.kind).join(','), br = pz.get('breakers');
+  const early = pz.interactables().filter((i) => br.switches.some((s) => s.pos === i.pos) && i.use).length;
+  const seq = []; for (const p of pz.list) { seq.push(pz.step === p); p.solve(); }
+  return { ok: order === 'fuses,keypad,breakers,valves,override' && early === 0 && seq.every(Boolean) && pz.ready && !!o.G.L.wing, info: order };`));
+await check('floor card ends on its own (real timers)', () => new Promise((res) => { const o = window.__offal; o.G.state = 'menu'; o.startRun('story', true, 'normal', { floor: 2 }); const t0 = performance.now();
+  const iv = setInterval(() => { if (o.G.state !== 'transition' || performance.now() - t0 > 150000) { clearInterval(iv); res({ ok: o.G.state === 'play', info: Math.round((performance.now() - t0) / 1000) + 's' }); } }, 200); }));
 await check('story ending plays through', new Function(`const enter = ${enter}; enter('story', 10); const o = window.__offal; o.G.dev = null; o.startEnding();
   return new Promise((r) => setTimeout(r, 1700)).then(() => { if (!o.G.cutscene) return { ok: false, why: 'no ending film' }; let k = 0; while (o.G.state === 'endcine' && k++ < 3000) o.updateEndCine(1 / 30);
   return { ok: o.G.state === 'ending' && o.save.story.done >= 1, info: 'state ' + o.G.state }; });`));

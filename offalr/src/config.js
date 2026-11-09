@@ -42,7 +42,9 @@ const STORY = [
   { name: 'THE QUIET LINE', quote: 'Everything the line made ends up in the smokehouse. The fires never went out.', lamp: 0xffa860, fog: 0x0a0503,
     size: 54, rooms: 17, tags: 6, hunters: 2, puzzles: ['hooks'], deadLamps: 0.5, pool: ['smoke', 'vats', 'line', 'bunks', 'shrine', 'hanging', 'smoke', 'vats', 'lockers', 'pit', 'smoke', 'bunks'], glass: 0.14 }, // the smokehouse: smoke chambers, rendering vats, bunks, a shrine; glass underfoot
   { name: 'THE LINE', quote: 'This is where it all goes. Stop the line, and the shift is over.', lamp: 0xff4030, fog: 0x080000,
-    size: 46, rooms: 13, tags: 0, hunters: 2, puzzles: ['breakers'], finale: true },
+    // the bottom: a big floor of halls, and one job after another (each needs the last) before the lift will go up
+    size: 62, rooms: 20, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'breakers', 'valves', 'override'], finale: true, chain: true, big: true,
+    pool: ['line', 'line', 'hanging', 'pens', 'cold', 'butcher', 'pit', 'lockers', 'vats', 'hanging', 'line', 'cold', 'pens', 'butcher', 'lockers', 'pit', 'shrine', 'cold', 'line', 'hanging'] },
 ];
 
 const DEEP = ['THE COLD ROOM', 'OFFAL PIT', 'BONE YARD', 'THE QUIET LINE', 'HIS OFFICE', 'FURTHER DOWN', 'WHERE THE DRAINS GO'];
@@ -105,7 +107,7 @@ export function difficulty(depth, mode = 'story', rng = Math.random, diffKey = '
   if (depth === 0) return { ...base, ...pace, batteries: 0, size: 14, rooms: 4, tags: 0, hunters: 0, puzzles: ['notice'], adrenaline: 0, gore: 0, screamers: 0, deadLamps: 0.1, theme: 'offices', intro: true };
   if (mode === 'story') {
     const f = STORY[Math.min(depth, STORY_FLOORS) - 1];
-    return { ...base, ...pace, batteries: batteriesFor(f.size, diffKey), size: f.size, rooms: f.rooms, tags: f.tags, hunters: f.hunters, puzzles: f.puzzles, finale: !!f.finale,
+    return { ...base, ...pace, batteries: batteriesFor(f.size, diffKey), size: f.size, rooms: f.rooms, tags: f.tags, hunters: f.hunters, puzzles: f.puzzles.slice(), finale: !!f.finale, chain: !!f.chain, big: !!f.big,
       fogBoost: (f.fogBoost || 0) + ((THEMES[f.theme || 'plant'] || {}).fogBoost || 0), deadLamps: f.deadLamps ?? base.deadLamps, theme: f.theme || 'plant', pool: f.pool, glass: f.glass || 0 };
   }
   // overtime: endless, and the puzzles are a lottery
