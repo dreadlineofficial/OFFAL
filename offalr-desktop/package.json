@@ -1,0 +1,54 @@
+{
+  "name": "offalr-desktop",
+  "productName": "OFFAL",
+  "version": "1.0.0",
+  "description": "OFFAL desktop app",
+  "author": "OFFAL",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "node copy-game.cjs && electron .",
+    "dist:win": "node copy-game.cjs && electron-builder --win portable --x64",
+    "dist:linux": "node copy-game.cjs && electron-builder --linux AppImage --x64",
+    "dist:mac": "node copy-game.cjs && electron-builder --mac zip --arm64 -c.mac.identity=null"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "games.offal.remastered",
+    "productName": "OFFAL",
+    "artifactName": "OFFAL-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "icon.png",
+      "game/**"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "win": {
+      "icon": "icon.png",
+      "signExecutable": false,
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "OFFAL-${version}-portable.exe",
+      "splashImage": "splash.bmp"
+    },
+    "linux": {
+      "icon": "icon.png",
+      "category": "Game"
+    },
+    "mac": {
+      "icon": "icon.png",
+      "category": "public.app-category.games",
+      "target": "zip"
+    }
+  }
+}

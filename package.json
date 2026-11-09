@@ -1,0 +1,18 @@
+{
+  "name": "offal",
+  "version": "1.0.0",
+  "description": "OFFAL: a first-person horror game set in the Hollow Pines Meatworks, 1998. three.js, one HTML file.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs 8090",
+    "build": "node tools/build-offalr.mjs",
+    "apk": "bash tools/build-offalr-apk.sh",
+    "lint": "eslint -c tools/eslint.offal.mjs offalr/src",
+    "test": "node tools/regress-offalr.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "engines": { "node": ">=18" }
+}

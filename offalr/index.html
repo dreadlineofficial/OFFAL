@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OFFAL</title>
+<meta name="description" content="OFFAL: a first-person horror game. Night shift at the Hollow Pines Meatworks.">
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="stylesheet" href="offal.css">
+<script type="importmap">{"imports":{"three":"./src/three-r.js"}}</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="7"/><feDisplacementMap in="SourceGraphic" scale="10"/></filter>
+  <filter id="rough-sm"><feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="2" seed="2"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter>
+</svg>
+
+<canvas id="view"></canvas>
+<canvas id="blood"></canvas>
+<div id="slits"></div>
+<div id="fade"></div>
+<div id="skip">SPACE &middot; SKIP</div>
+
+<!-- content warning: also the click that unlocks audio -->
+<section id="warn" class="screen on">
+  <div class="warn-box">
+    <p class="warn-h">CONTENT WARNING</p>
+    <p id="warnText" class="type"></p>
+    <p class="warn-go blink">[ click to clock in ]</p>
+  </div>
+</section>
+
+<section id="menu" class="screen">
+  <div id="version" class="version"></div>
+  <div class="menu-col">
+    <div class="title-wrap">
+      <h1 class="title" data-text="OFFAL">OFFAL</h1>
+      <div id="drips" class="drips"></div>
+    </div>
+    <p class="sub">HOLLOW PINES MEATWORKS &middot; NIGHT SHIFT</p>
+    <p id="safeNote" class="safe-note" hidden>SAFE GRAPHICS &middot; started with --safe: drawn without the graphics card, so it&rsquo;s slower. Start OFFAL normally to use the graphics card.</p>
+    <nav class="menu-nav">
+      <button data-act="story" id="btnStory">Clock in</button>
+      <button data-act="newstory" id="btnNew" hidden>Start a new shift</button>
+      <button data-act="overtime">Overtime <small>endless</small></button>
+      <button data-act="overtimeContinue" id="btnOvertimeContinue" hidden>Continue overtime</button>
+      <button data-act="howto">Orientation</button>
+      <button data-act="collection">Collection</button>
+      <button data-act="settings">Settings</button>
+    </nav>
+    <p class="menu-foot">headphones. lights off. <span id="mobileNote"></span></p>
+  </div>
+  <aside class="timecard" id="timecard"></aside>
+</section>
+
+<section id="howto" class="screen panel-screen">
+  <div class="panel paper">
+    <h2>NEW HIRE ORIENTATION</h2>
+    <ol class="rules">
+      <li>Every worker on the line swallowed their <b>brass ID tag</b>. The freight lift only goes down when you <b>feed it tags</b>.</li>
+      <li>Find the bodies. Hold <kbd>Q</kbd> to <b>listen for the flies</b>: a red arrow shows the way to the nearest body, and back to the lift once you have every tag. Hold <kbd>E</kbd> to cut the tag out. It is slow, but it is <b>quiet</b>: he can’t hear it. He can still walk in on you.</li>
+      <li>Bring the tags back to the lift, feed the panel, pull the lever, and go <b>deeper</b>. There is no bottom.</li>
+      <li><b>The Foreman</b> is still on shift. He hunts by <b>sound</b> and by <b>light</b>. Don't run unless you have to. Never shine your torch in his face.</li>
+      <li><b>One hit from his hook kills you.</b> Syringes (<kbd>R</kbd>) give you a few seconds of running that never runs out.</li>
+      <li>Most floors have a job besides the tags: no power, a sealed shutter, a jammed counterweight, steam on the brake. The objective line at the top always says what&rsquo;s next.</li>
+      <li>Hide in lockers with <kbd>E</kbd>. If he comes close, hold <kbd>SPACE</kbd> to hold your breath. If he watched you climb in, it will not help.</li>
+      <li><b>Crouchways</b> (low tunnels with striped frames) lead out of dead ends. Crouch with <kbd>C</kbd> and crawl in: he can't follow, and he'll give up on you.</li>
+      <li>A <b>captive-bolt gun</b> is lying on one of the lower floors. A bolt will drop him for a while. Bolts are scarce, and the shot is loud. Batteries and bolts go straight into the torch and the gun when you walk over them.</li>
+      <li>If you hear the hook dragging, it's patrolling. If it goes quiet, it's running.</li>
+    </ol>
+    <table class="keys">
+      <tr><td><kbd>W A S D</kbd></td><td>move</td><td><kbd>SHIFT</kbd></td><td>run (loud)</td></tr>
+      <tr><td><kbd>C</kbd></td><td>crouch on/off (quiet)</td><td><kbd>F</kbd></td><td>torch</td></tr>
+      <tr><td><kbd>E</kbd></td><td>use / cut / hide</td><td><kbd>SPACE</kbd></td><td>hold breath</td></tr>
+      <tr><td><kbd>Q</kbd> (hold)</td><td>listen: show the way</td><td><kbd>R</kbd></td><td>syringe: sprint</td></tr>
+      <tr><td><kbd>TAB</kbd></td><td>your tasks on this floor</td><td>left click</td><td>fire the bolt gun</td></tr>
+      <tr><td><kbd>ESC</kbd></td><td>pause</td><td><kbd>F11</kbd></td><td>fullscreen</td></tr>
+    </table>
+    <table class="keys pad-keys">
+      <tr><td><kbd>LEFT STICK</kbd></td><td>move (click it, or hold LB, to run)</td><td><kbd>RIGHT STICK</kbd></td><td>look</td></tr>
+      <tr><td><kbd>A</kbd></td><td>use / cut / hide</td><td><kbd>B</kbd></td><td>crouch on/off</td></tr>
+      <tr><td><kbd>X</kbd> (hold)</td><td>listen</td><td><kbd>Y</kbd></td><td>torch</td></tr>
+      <tr><td><kbd>LT</kbd> (hold)</td><td>hold breath</td><td><kbd>RT</kbd></td><td>fire the bolt gun</td></tr>
+      <tr><td><kbd>D-PAD UP</kbd></td><td>syringe</td><td><kbd>VIEW</kbd> / <kbd>MENU</kbd></td><td>tasks / pause</td></tr>
+    </table>
+    <button class="back" data-act="back">Back</button>
+  </div>
+</section>
+
+<section id="difficulty" class="screen panel-screen">
+  <div class="diff-in">
+    <h2 id="diffTitle" class="diff-title">HOW HARD IS THIS SHIFT?</h2>
+    <div class="diff-cards">
+      <button class="diff-card" data-act="diff" data-diff="easy"><b>EASY</b><span class="pace">You can outrun him</span><span>Walking, crouching, hiding and working the puzzles make no sound. Running is quieter.</span></button>
+      <button class="diff-card" data-act="diff" data-diff="normal"><b>NORMAL</b><span class="pace">He&rsquo;s almost as fast as you</span><span>You&rsquo;re still a little faster. Everything that makes noise makes noise.</span></button>
+      <button class="diff-card" data-act="diff" data-diff="hard"><b>HARD</b><span class="pace">He&rsquo;s a little faster than you</span><span>Footsteps, lockers and machinery carry further. He hears you breathe sooner.</span></button>
+      <button class="diff-card" data-act="diff" data-diff="extreme"><b>EXTREME</b><span class="pace">He is faster than you</span><span>You will not outrun him. Everything is loud. Hide, or don&rsquo;t be seen.</span></button>
+    </div>
+    <div id="floorPick" class="floor-pick" hidden><b>START FROM</b><div id="floorPickBtns"></div></div>
+    <label class="dev-toggle"><input type="checkbox" id="devMode"><b>DEV MODE</b><span>Unlocks everything: start on any floor, every keepsake and every film in the collection. Every floor starts complete (all the tags already in the lift, every puzzle solved: just pull the lever), and <kbd>~</kbd> (the key under Esc) opens a dev menu in game: walk through walls, make him unable to see or hear you, complete the floor.</span></label>
+    <button class="back" data-act="back">Back</button>
+  </div>
+</section>
+
+<section id="settings" class="screen panel-screen">
+  <div class="panel paper settings-panel">
+    <h2>SETTINGS</h2>
+    <nav class="set-tabs" id="setTabs">
+      <button data-tab="gfx" class="on">Graphics</button>
+      <button data-tab="display">Display</button>
+      <button data-tab="controls">Controls</button>
+      <button data-tab="sound">Sound</button>
+      <button data-tab="iface">Interface</button>
+      <button data-tab="custom">Customize</button>
+    </nav>
+    <div class="set-page on" data-page="gfx">
+      <label data-tip="Default: the game as it looks now. Classic: OFFAL as it looked in 1998: low-poly models, the original textures, 300 lines, dithered. Same game, same save. Switch back here any time; it restarts the game.">Look
+        <select id="look">
+          <option value="remastered">Default</option>
+          <option value="classic">Classic (the 1998 look)</option>
+        </select>
+      </label>
+      <div id="looksetsC">
+        <label data-tip="How many lines the Classic picture is drawn with.">Resolution
+          <select id="pix">
+            <option value="200">Crunchy (200p)</option>
+            <option value="300">Grim (300p)</option>
+            <option value="450">Clear (450p)</option>
+            <option value="720">Sharp (720p)</option>
+          </select>
+        </label>
+      </div>
+      <div id="looksetsR">
+        <label class="big" data-tip="One choice for everything below. Auto picks it from your graphics card. Change any single option and the set becomes Custom.">Quality preset
+          <select id="gfx">
+            <option value="auto" id="gfxAuto">Auto</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="ultra">Ultra</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <p class="set-note" id="gpuName"></p>
+        <label data-tip="The resolution the world is drawn at, whatever size the window is: below your screen it is faster, above it (up to 4K) every edge is supersampled.">Render resolution
+          <select id="res">
+            <option value="preset">By preset</option>
+            <option value="720">720p (HD)</option>
+            <option value="900">900p</option>
+            <option value="1080">1080p (Full HD)</option>
+            <option value="1440">1440p (QHD)</option>
+            <option value="2160">2160p (4K UHD)</option>
+            <option value="native">Native (your screen)</option>
+          </select>
+        </label>
+        <label class="check" data-tip="When frames take too long, the world is drawn at a lower resolution until there is room again. Keeps the game smooth.">Dynamic resolution <input type="checkbox" id="dynRes"></label>
+        <h3 class="set-h">LIGHT &amp; SHADOW</h3>
+        <label data-tip="How sharp the torch's shadows are. Everything it touches throws one.">Shadow quality
+          <select id="shadowQ"><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option><option value="4">Ultra</option></select>
+        </label>
+        <label data-tip="How many of the nearest ceiling lamps cast real shadows. The heaviest option here.">Lamp shadows
+          <select id="lampShadows"><option value="0">None</option><option value="1">1 lamp</option><option value="2">2 lamps</option><option value="3">3 lamps</option><option value="4">4 lamps</option></select>
+        </label>
+        <label data-tip="How many of the nearest ceiling lamps light the room around you. Fewer is faster; the rest still glow.">Lamps lighting the room
+          <select id="lights"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select>
+        </label>
+        <label data-tip="Light you can see in the air: the torch beam and the lamps through the dust and damp.">Volumetric light
+          <select id="volQ"><option value="0">Off</option><option value="1">Low</option><option value="2">High</option><option value="3">Ultra</option></select>
+        </label>
+        <label data-tip="Dirt and darkness gathered in every corner and under everything.">Ambient occlusion
+          <select id="ssaoQ"><option value="0">Off</option><option value="1">On</option><option value="2">High</option></select>
+        </label>
+        <label data-tip="Wet floors, puddles and blood mirror the lamps and the walls.">Wet-floor reflections
+          <select id="reflQ"><option value="0">Off</option><option value="1">Low</option><option value="2">High</option><option value="3">Ultra</option></select>
+        </label>
+        <label class="check" data-tip="Your eyes open in the dark and close against the torch on a near wall.">Eye adaptation <input type="checkbox" id="eyeAdapt"></label>
+        <label class="check" data-tip="Lamps, LEDs and his eyes glow.">Bloom <input type="checkbox" id="bloom"></label>
+        <h3 class="set-h">PICTURE</h3>
+        <label class="check" data-tip="Smooths jagged edges (FXAA).">Anti-aliasing <input type="checkbox" id="aa"></label>
+        <label data-tip="Film grain over the picture.">Film grain <span class="val" id="grainV"></span><input type="range" id="grain" min="0" max="1.5" step="0.05"></label>
+        <label class="check" data-tip="The colour fringing of a cheap lens, at the edges of the picture.">Lens fringing <input type="checkbox" id="ca"></label>
+        <h3 class="set-h">DETAIL <small>(applies the next time OFFAL starts)</small></h3>
+        <label data-tip="How finely every surface is painted. Ultra needs a graphics card with plenty of memory.">Texture quality
+          <select id="texQ"><option value="1">Low</option><option value="2">High</option><option value="3">Ultra</option></select>
+        </label>
+        <label data-tip="Keeps floors and walls sharp at a glancing angle.">Texture filtering
+          <select id="aniso"><option value="1">Bilinear</option><option value="4">4&times; anisotropic</option><option value="8">8&times; anisotropic</option><option value="16">16&times; anisotropic</option></select>
+        </label>
+        <label data-tip="Bevelled edges and smoother curves on everything.">Model detail
+          <select id="detailQ"><option value="0">Original</option><option value="1">High</option><option value="2">Ultra</option></select>
+        </label>
+        <p class="set-note warn" id="restartNote" hidden>Texture and model changes take effect the next time OFFAL starts.</p>
+      </div>
+      <label data-tip="How far away things are still drawn.">Draw distance
+        <select id="draw">
+          <option value="0.6">Near (fastest)</option>
+          <option value="1">Normal</option>
+          <option value="1.5">Far</option>
+        </select>
+      </label>
+      <button class="set-reset" id="lookReset" type="button" data-tip="Every picture setting back to how the game comes: the Default look, the quality picked for your graphics card, normal brightness, no filter, the game's own colour.">Reset to the original look</button>
+    </div>
+    <div class="set-page" data-page="display">
+      <label class="check" data-tip="F11 also toggles it.">Fullscreen <small>(F11)</small> <input type="checkbox" id="fullscreen"></label>
+      <label data-tip="A cap on frames per second. Lower saves battery and heat.">Frame rate
+        <select id="fps">
+          <option value="30">30 fps (saves battery)</option>
+          <option value="60">60 fps</option>
+          <option value="120">120 fps</option>
+          <option value="144">144 fps</option>
+          <option value="0">Unlimited</option>
+        </select>
+      </label>
+      <label data-tip="Turn it up until you can only just see the shapes in the darkest corner.">Brightness <span class="val" id="gammaV"></span><input type="range" id="gamma" min="0.6" max="1.8" step="0.02"></label>
+      <label data-tip="How wide you see.">Field of view <span class="val" id="fovV"></span><input type="range" id="fov" min="60" max="100" step="1"></label>
+      <label class="check" data-tip="The camera shakes when something hits hard.">Screen shake <input type="checkbox" id="shake"></label>
+      <label class="check" data-tip="The camera rises and falls as you walk.">Head bob <input type="checkbox" id="bob"></label>
+      <label class="check" data-tip="Important sounds written at the bottom of the screen, with which way they came from.">Captions <input type="checkbox" id="captions"></label>
+      <label class="check" data-tip="No organs or body parts lying around, bodies on the floor show only blood, and the death films are the least gory ones, with almost none. Floors change from the next one you load.">Less gore <input type="checkbox" id="lessGore"></label>
+    </div>
+    <div class="set-page" data-page="controls">
+      <label class="mouse-only" data-tip="How far the view turns for a move of the mouse.">Mouse sensitivity <span class="val" id="sensV"></span><input type="range" id="sens" min="0.2" max="3" step="0.05"></label>
+      <label data-tip="How fast the view turns with the right stick of a controller.">Controller look speed <span class="val" id="padSensV"></span><input type="range" id="padSens" min="0.3" max="3" step="0.05"></label>
+      <label class="touch-only" data-tip="How far the view turns for a swipe.">Touch look sensitivity <span class="val" id="tsensV"></span><input type="range" id="tsens" min="0.1" max="4" step="0.05"></label>
+      <label class="check" data-tip="Mouse up looks down.">Invert mouse Y <input type="checkbox" id="invert"></label>
+      <h3 class="set-h">TORCH</h3>
+      <label data-tip="How wide the torch beam spreads.">Beam width <span class="val" id="beamV"></span><input type="range" id="beam" min="0.3" max="0.95" step="0.01"></label>
+      <label data-tip="How bright the torch is.">Beam brightness <span class="val" id="powerV"></span><input type="range" id="power" min="60" max="400" step="5"></label>
+    </div>
+    <div class="set-page" data-page="sound">
+      <label data-tip="Everything you hear. Wear headphones.">Volume <span class="val" id="volV"></span><input type="range" id="vol" min="0" max="1" step="0.01"></label>
+    </div>
+    <div class="set-page" data-page="custom">
+      <h3 class="set-h">COLOUR</h3>
+      <label data-tip="The colour of the whole picture. Default is OFFAL's own: everything bleached but the blood.">Colour grade
+        <select id="grade">
+          <option value="0">Default (bleached, red blood)</option>
+          <option value="1">1998 (the bleach, harder)</option>
+          <option value="2">Noir (black and white)</option>
+          <option value="3">Sepia</option>
+          <option value="4">Cold steel</option>
+          <option value="5">Sick green</option>
+          <option value="6">Natural colour</option>
+          <option value="7">Crimson</option>
+          <option value="8">Night vision</option>
+        </select>
+      </label>
+      <label data-tip="How much the blood keeps its red when everything else is graded. 0: the blood goes the same way as the rest.">Blood colour <span class="val" id="bloodV"></span><input type="range" id="blood" min="0" max="1.5" step="0.05"></label>
+      <label data-tip="Harder or softer between the darks and the lights.">Contrast <span class="val" id="contrastV"></span><input type="range" id="contrast" min="0.7" max="1.5" step="0.02"></label>
+      <label data-tip="The dark at the edges of the picture.">Vignette <span class="val" id="vignetteV"></span><input type="range" id="vignette" min="0" max="1.5" step="0.05"></label>
+      <h3 class="set-h">FILTER</h3>
+      <label data-tip="Watch it on something else: a worn VHS tape, a reel of old film, a curved CRT, the plant's own security cameras, or 340 lines and a handful of colours.">Screen filter
+        <select id="filter">
+          <option value="0">None</option>
+          <option value="1">VHS tape</option>
+          <option value="2">Old film</option>
+          <option value="3">CRT television</option>
+          <option value="4">Security camera</option>
+          <option value="5">Retro (340p)</option>
+        </select>
+      </label>
+      <label data-tip="How strong the filter is.">Filter strength <span class="val" id="filterAmtV"></span><input type="range" id="filterAmt" min="0.1" max="1" step="0.05"></label>
+      <h3 class="set-h">AIR</h3>
+      <label data-tip="The dust you see drifting in the torch beam. Turn it down or off if it gets in the way.">Dust in the torch beam <span class="val" id="dustV"></span><input type="range" id="dust" min="0" max="1" step="0.05"></label>
+      <button class="set-reset" id="customReset" type="button">Reset to the original look</button>
+    </div>
+    <div class="set-page" data-page="iface">
+      <label data-tip="The size of the menus and panels.">Menu size <span class="val" id="uiMenuV"></span><input type="range" id="uiMenu" min="1" max="100" step="1"></label>
+      <label data-tip="The size of everything on screen while you play.">In-game HUD size <span class="val" id="uiGameV"></span><input type="range" id="uiGame" min="1" max="100" step="1"></label>
+      <label class="check" data-tip="The shift briefing and the line telling you what to do next.">Shift briefing &amp; objective hints <input type="checkbox" id="hints"></label>
+      <label class="check" data-tip="Unlocks everything: every floor to start on, every keepsake and every death film. Floors start complete, and ~ opens the dev menu in game.">Dev mode <small>(unlocks everything)</small> <input type="checkbox" id="devMode2"></label>
+    </div>
+    <p class="set-tip" id="setTip">&nbsp;</p>
+    <button class="back" data-act="back">Back</button>
+  </div>
+</section>
+
+<div id="captionBox" class="captions"></div>
+<section id="hud" class="screen">
+  <div id="floorLabel" class="hud-tl"></div>
+  <div id="objective" class="objective"></div>
+  <div id="compass"><div class="needle" id="needle"><i></i></div><span id="compassD"></span></div>
+  <div id="brief" class="brief"><b>SHIFT BRIEFING</b><p id="briefText"></p></div>
+  <div id="hotbar" class="hotbar"></div>
+  <div class="hud-br"><div id="battery" class="battery"></div><div class="hud-small">TORCH</div></div>
+  <div id="tasks" class="tasks"><div id="tasksBody"></div><p class="tasks-help"><kbd>TAB</kbd> TO PUT IT AWAY</p></div>
+  <div id="stamina"><div class="st-bar"><i id="staminaFill"></i></div><span id="staminaLabel">STAMINA</span></div>
+  <div id="dot"></div>
+  <div id="prompt"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle id="ring" cx="20" cy="20" r="16" class="ring"/></svg><span id="promptText"></span></div>
+  <div id="breath"><div id="breathFill"></div><span>HOLD YOUR BREATH</span></div>
+  <div id="msg"></div>
+  <div id="note" class="note"><b id="noteTitle"></b><p id="noteBig" class="note-big"></p><p id="noteSmall" class="note-small"></p></div>
+  <div id="keypad" class="keypad">
+    <div class="kp-head">SHUTTER CONTROL</div>
+    <div id="kpSlots" class="kp-slots"></div>
+    <div class="kp-pad"><button data-kp="Digit1">1</button><button data-kp="Digit2">2</button><button data-kp="Digit3">3</button><button data-kp="Digit4">4</button><button data-kp="Digit5">5</button><button data-kp="Digit6">6</button><button data-kp="Digit7">7</button><button data-kp="Digit8">8</button><button data-kp="Digit9">9</button><button data-kp="Backspace">&#9003;</button><button data-kp="Digit0">0</button><button data-kp="Enter">OK</button><button data-kp="KeyE" class="kp-close">STEP AWAY</button></div>
+    <div class="kp-help">TYPE THE CODE <kbd>0</kbd>&ndash;<kbd>9</kbd> &middot; <kbd>ENTER</kbd> TO TRY IT &middot; <kbd>E</kbd> TO STEP AWAY<br>A WRONG CODE SOUNDS THE ALARM</div>
+  </div>
+  <div id="pa"></div>
+  <div id="devBadge">DEV MODE &middot; <kbd>~</kbd> MENU</div>
+</section>
+
+<section id="cinema" class="screen panel-screen">
+  <div class="panel dark cine-panel">
+    <h2>CINEMA</h2>
+    <p class="dim">Staged shots for trailers and thumbnails, played live at full resolution with no HUD. Start your recorder, pick a shot. Moving shots loop; still shots hold. <kbd>ESC</kbd> or <kbd>E</kbd> comes back here.</p>
+    <div id="cineList" class="cine-list"></div>
+    <button class="back" data-act="back">Back</button>
+  </div>
+</section>
+
+<section id="tape" class="screen tape-screen">
+  <canvas id="tapeCv"></canvas>
+  <div class="tape-bar"><button id="tapeFs">FULLSCREEN (F)</button><button id="tapeSkip">SKIP (E)</button></div>
+</section>
+
+<section id="letter" class="screen panel-screen">
+  <div class="panel paper letter">
+    <h2 id="letterTitle"></h2>
+    <p class="letter-head" id="letterHead"></p>
+    <div id="letterBody" class="letter-body"></div>
+    <p class="letter-sign" id="letterSign"></p>
+    <p class="letter-from" id="letterFrom"></p>
+    <p class="dim letter-help">E, ESC OR CLICK TO FOLD IT AWAY</p>
+  </div>
+</section>
+
+<section id="inspect" class="screen panel-screen">
+  <div class="insp">
+    <canvas id="inspCv"></canvas>
+    <div class="insp-text">
+      <h2 id="inspName"></h2>
+      <p id="inspText"></p>
+      <p id="inspCount" class="dim insp-count"></p>
+      <p class="dim insp-help">DRAG TO TURN IT OVER &middot; WHEEL TO LOOK CLOSER &middot; <span id="inspClose">E OR ESC TO POCKET IT</span></p>
+    </div>
+  </div>
+</section>
+
+<section id="devmenu" class="screen panel-screen">
+  <div class="panel dark dev-panel">
+    <h2>DEV MENU</h2>
+    <label class="dev-opt"><input type="checkbox" id="devNoclip"> Walk through walls</label>
+    <label class="dev-opt"><input type="checkbox" id="devGhost"> The Foreman can&rsquo;t see or hear you</label>
+    <label class="dev-opt"><input type="checkbox" id="devPresolve"> Every floor starts complete (tags in the lift, puzzles solved)</label>
+    <button class="dev-btn" data-act="devsolve">Complete this floor now (tags and puzzles)</button>
+    <p class="dim inv-help"><kbd>~</kbd> or ESC to close.</p>
+  </div>
+</section>
+
+<section id="collection" class="screen panel-screen">
+  <div class="panel paper coll-panel">
+    <h2>COLLECTION</h2>
+    <h3 class="set-h">KEEPSAKES <span id="collCount"></span></h3>
+    <div class="coll-grid" id="collKeep"></div>
+    <div class="coll-read" id="collRead"></div>
+    <h3 class="set-h">WAYS YOU DIED, AND THE WAY OUT</h3>
+    <div class="coll-cuts" id="collCuts"></div>
+    <h3 class="set-h">ACHIEVEMENTS <span id="achCount"></span></h3>
+    <div class="coll-ach" id="collAch"></div>
+    <button class="back" data-act="back">Back</button>
+  </div>
+</section>
+
+<section id="card" class="screen">
+  <div class="card-in">
+    <div id="cardB" class="card-b"></div>
+    <div id="cardName" class="card-name"></div>
+    <p id="cardQuote" class="card-q"></p>
+  </div>
+</section>
+
+<section id="pause" class="screen panel-screen">
+  <div class="panel dark">
+    <h2 class="red">SHIFT PAUSED</h2>
+    <p class="dim">He is not paused. He is waiting.</p>
+    <nav class="menu-nav">
+      <button data-act="resume">Back to work</button>
+      <button data-act="settings">Settings</button>
+      <button data-act="quit">Walk off the job</button>
+    </nav>
+  </div>
+</section>
+
+<section id="death" class="screen">
+  <div class="death-in">
+    <h1 id="deathTitle" class="death-title"></h1>
+    <p id="deathCause" class="death-cause"></p>
+    <div id="deathStats" class="death-stats"></div>
+    <nav class="menu-nav row">
+      <button data-act="retry" id="btnRetry">Try again</button>
+      <button data-act="menu">Leave</button>
+    </nav>
+  </div>
+</section>
+
+<section id="ending" class="screen">
+  <div class="end-in">
+    <div id="endLines" class="end-lines"></div>
+    <div id="endStamp" class="end-stamp">SHIFT COMPLETE</div>
+    <div id="endStats" class="death-stats end-stats"></div>
+    <nav id="endNav" class="menu-nav row end-nav">
+      <button data-act="overtime">Overtime <small>endless</small></button>
+      <button data-act="menu">Back to the menu</button>
+    </nav>
+  </div>
+</section>
+
+<div id="filterOsd" aria-hidden="true"><span class="osd-tl"></span><span class="osd-bl"></span><span class="osd-tr"></span></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

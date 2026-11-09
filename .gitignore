@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+dist/*.apk
+dist/*.idsig
+offalr-desktop/node_modules/
+offalr-desktop/release/
+offalr-desktop/game/
+offalr-android/debug.keystore
