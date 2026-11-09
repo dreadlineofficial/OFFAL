@@ -45,8 +45,8 @@ const STORY = [
    
     // the bottom: the main factory floor, one open hall under a roof 12 m up, and one job after another (each needs
     // the last) before the lift will go up
-    size: 48, rooms: 14, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'scale', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, ceil: 12, fogBoost: -0.045,
-    pool: ['line', 'vats', 'pens', 'butcher', 'hanging', 'pit', 'line', 'vats', 'lockers', 'butcher', 'pens', 'pit', 'vats', 'line'] }, // (one hall of hanging meat: the overhead line carries the rest)
+    size: 56, rooms: 14, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'scale', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, ceil: 12, fogBoost: -0.035,
+    pool: ['line', 'vats', 'pens', 'line', 'butcher', 'vats', 'line', 'pens', 'line', 'vats', 'butcher', 'line', 'vats', 'line'] }, // (one hall of hanging meat: the overhead line carries the rest)
 ];
 
 const DEEP = ['THE COLD ROOM', 'OFFAL PIT', 'BONE YARD', 'THE QUIET LINE', 'HIS OFFICE', 'FURTHER DOWN', 'WHERE THE DRAINS GO'];

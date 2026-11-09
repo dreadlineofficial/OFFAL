@@ -38,10 +38,12 @@ function dress(L, mats, group, out, h) {
   for (const o of group.children.slice()) {
     if (o.userData.hall) continue;
     if (swing.has(o)) { // a chain hanging free (the carcasses hang from rails, which get their own)
-      if (o.userData.swing) group.add(rod(chain, o.position.x, o.position.z, o.position.y, CEIL, 0.012));
+      if (o.userData.swing && !(L.low && L.low[Math.floor(o.position.z / TILE) * W + Math.floor(o.position.x / TILE)])) group.add(rod(chain, o.position.x, o.position.z, o.position.y, CEIL, 0.012));
       continue;
     }
     bb.setFromObject(o);
+    const ti = Math.floor((bb.min.z + bb.max.z) / 2 / TILE) * W + Math.floor((bb.min.x + bb.max.x) / 2 / TILE);
+    if (L.low && L.low[ti]) continue; // (a small room: it has its own ceiling)
     if (bb.isEmpty() || bb.max.y < WALL_H - 0.35 || bb.max.y > WALL_H + 0.05 || bb.min.y < 1.6) continue;
     const sx = bb.max.x - bb.min.x, sz = bb.max.z - bb.min.z, cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
     const top = bb.max.y;
@@ -53,7 +55,7 @@ function dress(L, mats, group, out, h) {
   }
 
   // ---- roof trusses, east-west across the hall every 6 m, and across the annex ----
-  const x0 = 2 * TILE, x1 = (hi.hallR + 1) * TILE;
+  const x0 = hi.left * TILE, x1 = (hi.hallR + 1) * TILE;
   const truss = (xa, xb, z) => {
     const span = xb - xa, cx = (xa + xb) / 2, yT = CEIL - 0.2, yB = CEIL - 1.5;
     put(mesh(box(span, 0.24, 0.24), rust), cx, yT, z);
@@ -89,7 +91,7 @@ function dress(L, mats, group, out, h) {
   const catwalk = (xa, za, xb, zb) => {
     const along = Math.abs(xb - xa) > Math.abs(zb - za), len = along ? Math.abs(xb - xa) : Math.abs(zb - za);
     const g = new THREE.Group();
-    g.add(mesh(box(len, 0.06, 1.3), steel, true));
+    g.add(mesh(box(len, 0.06, 1.3), steel));
     for (const s of [-1, 1]) {
       const toe = mesh(box(len, 0.14, 0.02), rust); toe.position.set(0, 0.1, s * 0.64); g.add(toe);
       for (const y of [0.55, 1.05]) { const r = mesh(box(len, 0.045, 0.045), red); r.position.set(0, y, s * 0.64); g.add(r); }
@@ -102,13 +104,13 @@ function dress(L, mats, group, out, h) {
       group.add(rod(dark, px, pz, deckY + 1.05, CEIL - 1.5, 0.025));
     }
   };
-  for (let x = 2 + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) catwalk(tc(x + 1), (hi.top + 0.5) * TILE, tc(x + 1), (hi.bottom + 0.5) * TILE);
+  for (let x = hi.left + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) catwalk(tc(x + 1), (hi.top + 0.5) * TILE, tc(x + 1), (hi.bottom + 0.5) * TILE);
   const midRow = hi.top + 2 * (hi.zh + hi.gap) - hi.gap;
   catwalk(x0 + 1, tc(midRow) + 1, x1 - 1, tc(midRow) + 1);
 
   // ---- red-and-white lane lines down both sides of every aisle, the way a new plant marks its walkways ----
-  for (let x = 2 + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) for (const e of [x * TILE + 0.12, (x + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, e, (hi.top + hi.bottom + 1) / 2 * TILE, 0.14, (hi.bottom - hi.top + 1) * TILE - 0.4, 0, 1);
-  for (let y = hi.top + hi.zh; y < hi.bottom; y += hi.zh + hi.gap) for (const e of [y * TILE + 0.12, (y + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, (2 + hi.hallR + 1) / 2 * TILE, e, 0.14, (hi.hallR - 1) * TILE - 0.4, Math.PI / 2, 1);
+  for (let x = hi.left + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) for (const e of [x * TILE + 0.12, (x + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, e, (hi.top + hi.bottom + 1) / 2 * TILE, 0.14, (hi.bottom - hi.top + 1) * TILE - 0.4, 0, 1);
+  for (let y = hi.top + hi.zh; y < hi.bottom; y += hi.zh + hi.gap) for (const e of [y * TILE + 0.12, (y + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, (hi.left + hi.hallR + 1) / 2 * TILE, e, 0.14, (hi.hallR - hi.left + 1) * TILE - 0.4, Math.PI / 2, 1);
 
   // ---- machines: a tall one in each work area that has the room, on four free floor tiles ----
   const machine = (kind) => {
@@ -158,10 +160,10 @@ function dress(L, mats, group, out, h) {
 
   // ---- clutter: pallets of boxes, drums, roll cages, a forklift or two, wherever it won't cut anything off ----
   const P2 = h.P2;
-  const drum = (col) => { const g = new THREE.Group(); const b = mesh(cyl(0.29, 0.29, 0.88, 16), col, true); b.position.y = 0.44; g.add(b); for (const y of [0.3, 0.6]) { const r = mesh(cyl(0.3, 0.3, 0.03, 16), dark); r.position.y = y; g.add(r); } const lid = mesh(cyl(0.27, 0.27, 0.02, 16), dark); lid.position.y = 0.89; g.add(lid); return g; };
+  const drum = (col) => { const g = new THREE.Group(); const b = mesh(cyl(0.29, 0.29, 0.88, 16), col); b.position.y = 0.44; g.add(b); for (const y of [0.3, 0.6]) { const r = mesh(cyl(0.3, 0.3, 0.03, 16), dark); r.position.y = y; g.add(r); } const lid = mesh(cyl(0.27, 0.27, 0.02, 16), dark); lid.position.y = 0.89; g.add(lid); return g; };
   const drums = () => { const g = new THREE.Group(); const n = 2 + ((rng() * 3) | 0); for (let i = 0; i < n; i++) { const d = drum(rng() < 0.5 ? red : dark); d.position.set((i % 2) * 0.62 - 0.3, 0, (i >> 1) * 0.62 - 0.3); d.rotation.y = rng() * 6; g.add(d); } if (rng() < 0.3) { const d = drum(red); d.rotation.z = Math.PI / 2; d.position.set(0.1, 0.3, 0.55); g.add(d); } return g; };
-  const wrapped = () => { const g = new THREE.Group(); const pal = mesh(box(1.2, 0.14, 1.0), M.wood, true); pal.position.y = 0.07; g.add(pal); const hgt = [0.8, 1.1, 1.4, 1.7][(rng() * 4) | 0]; const st = mesh(box(1.12, hgt, 0.94), M.wrap, true); st.position.y = 0.14 + hgt / 2; g.add(st); return g; };
-  const cage = () => { const g = new THREE.Group(); for (const [x, z] of [[-0.4, -0.35], [0.4, -0.35], [-0.4, 0.35], [0.4, 0.35]]) { const p = mesh(box(0.04, 1.7, 0.04), steel); p.position.set(x, 0.95, z); g.add(p); } for (const y of [0.15, 0.6, 1.05, 1.5]) for (const z of [-0.35, 0.35]) { const r = mesh(box(0.84, 0.03, 0.03), steel); r.position.set(0, y, z); g.add(r); } const base = mesh(box(0.86, 0.06, 0.74), dark, true); base.position.y = 0.12; g.add(base); for (let i = 0; i < 2; i++) { const c2 = mesh(box(0.6, 0.4, 0.5), M.wrap, true); c2.position.set(0, 0.36 + i * 0.42, 0); g.add(c2); } return g; };
+  const wrapped = () => { const g = new THREE.Group(); const pal = mesh(box(1.2, 0.14, 1.0), M.wood); pal.position.y = 0.07; g.add(pal); const hgt = [0.8, 1.1, 1.4, 1.7][(rng() * 4) | 0]; const st = mesh(box(1.12, hgt, 0.94), M.wrap); st.position.y = 0.14 + hgt / 2; g.add(st); return g; };
+  const cage = () => { const g = new THREE.Group(); for (const [x, z] of [[-0.4, -0.35], [0.4, -0.35], [-0.4, 0.35], [0.4, 0.35]]) { const p = mesh(box(0.04, 1.7, 0.04), steel); p.position.set(x, 0.95, z); g.add(p); } for (const y of [0.15, 0.6, 1.05, 1.5]) for (const z of [-0.35, 0.35]) { const r = mesh(box(0.84, 0.03, 0.03), steel); r.position.set(0, y, z); g.add(r); } const base = mesh(box(0.86, 0.06, 0.74), dark); base.position.y = 0.12; g.add(base); for (let i = 0; i < 2; i++) { const c2 = mesh(box(0.6, 0.4, 0.5), M.wrap); c2.position.set(0, 0.36 + i * 0.42, 0); g.add(c2); } return g; };
   let forks = 0;
   for (let ri = 1; ri < L.rooms.length; ri++) {
     const r = L.rooms[ri];
@@ -171,7 +173,7 @@ function dress(L, mats, group, out, h) {
     rng.shuffle(tiles);
     let n = 0;
     for (const [x, y] of tiles) {
-      if (n >= 6) break;
+      if (n >= (r.fixed ? 1 : 9)) break; // (the small rooms have their own furniture)
       if (!h.canBlock(x, y)) continue;
       h.blockTile(x, y);
       const cx = tc(x), cz = tc(y), k = rng();
@@ -187,24 +189,30 @@ function dress(L, mats, group, out, h) {
   // ---- the columns: bay numbers, an extinguisher, a junction box with its conduit to the roof, a beacon on some ----
   const beacons = [];
   let bay = 1;
-  for (let x = 2; x <= hi.hallR; x++) for (let y = hi.top; y <= hi.bottom; y++) {
-    if (L.grid[y * W + x]) continue;
-    const cx = tc(x), cz = tc(y), label = `${String.fromCharCode(65 + ((x - 2) / (hi.zw + hi.gap) | 0))}-${String(bay++).padStart(2, '0')}`;
-    const plateM = new THREE.MeshPhongMaterial({ map: labelTex(label), shininess: 20 });
+  const cols = [];
+  for (let x = hi.left; x <= hi.hallR; x++) for (let y = hi.top; y <= hi.bottom; y++) if (!L.grid[y * W + x]) cols.push([x, y]);
+  // every bay number on one texture (one material for all of them: one draw per block, not one per column)
+  const labels = cols.map(([x]) => `${String.fromCharCode(65 + ((x - hi.left) / (hi.zw + hi.gap) | 0))}-${String(bay++).padStart(2, '0')}`);
+  const plateM = new THREE.MeshPhongMaterial({ map: atlasTex(labels, 128, 64, drawLabel), shininess: 20 });
+  let nb = 0;
+  cols.forEach(([x, y], ci) => {
+    const cx = tc(x), cz = tc(y);
+    const pg = cellGeo(new THREE.PlaneGeometry(0.9, 0.45), ci, plateM.map.userData.grid);
     for (const [dx, dz, yaw] of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]]) {
-      const plate = new THREE.Mesh(geo('bayPlate', () => new THREE.PlaneGeometry(0.9, 0.45)), plateM);
+      const plate = new THREE.Mesh(pg, plateM);
       put(plate, cx + dx * 1.01, 3.6, cz + dz * 1.01, yaw);
     }
     const [fx, fz, fyaw] = rng() < 0.5 ? [0, 1, 0] : [0, -1, Math.PI];
     const ext = new THREE.Group();
-    const bottle = mesh(cyl(0.08, 0.08, 0.5, 12), red, true); bottle.position.y = 0.25; ext.add(bottle);
+    const bottle = mesh(cyl(0.08, 0.08, 0.5, 12), red); bottle.position.y = 0.25; ext.add(bottle);
     const capm = mesh(cyl(0.035, 0.05, 0.08, 8), dark); capm.position.y = 0.54; ext.add(capm);
     const hose = mesh(cyl(0.012, 0.012, 0.42, 5), dark); hose.position.set(0.09, 0.32, 0); hose.rotation.z = 0.15; ext.add(hose);
     const bracket = mesh(box(0.2, 0.06, 0.08), dark); bracket.position.set(0, 0.35, -0.06); ext.add(bracket);
     put(ext, cx + fx * 1.11, 0.9, cz + fz * 1.11, fyaw);
-    const jb = mesh(box(0.42, 0.55, 0.16), M.grey2, true); put(jb, cx + 0.45, 1.6, cz + fz * 1.08, fyaw);
+    const jb = mesh(box(0.42, 0.55, 0.16), M.grey2); put(jb, cx + 0.45, 1.6, cz + fz * 1.08, fyaw);
     group.add(rod(M.grey2, cx + 0.45, cz + fz * 1.06, 1.88, CEIL, 0.025));
-    if (rng() < 0.5) { // a beacon, turning
+    if (nb < 6 && rng() < 0.4) { // a beacon, turning (a few: each one is drawn on its own)
+      nb++;
       const b = new THREE.Group();
       const dome = mesh(geo('beacon', () => new THREE.SphereGeometry(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)), M.beacon); b.add(dome);
       const base = mesh(cyl(0.14, 0.14, 0.08, 12), dark); base.position.y = -0.04; b.add(base);
@@ -212,29 +220,29 @@ function dress(L, mats, group, out, h) {
       put(b, cx, 4.3, cz + fz * 1.12, 0);
       beacons.push(b);
     }
-  }
+  });
 
   // ---- signs high on the walls: the plant's name, and what it told its workers ----
   const SIGNS = [['HOLLOW PINES MEATWORKS', 'MAIN FLOOR · LINE 3'], ['SAFETY IS', 'EVERYONE’S JOB'], ['0', 'DAYS WITHOUT A LOST-TIME INJURY'], ['KEEP HANDS', 'CLEAR OF THE LINE'], ['HYGIENE ZONE', 'APRONS · GLOVES · HAIRNETS']];
   const walls = [];
-  for (let x = 4; x < hi.hallR - 4; x += 9) walls.push([tc(x) + 4, (hi.top) * TILE + 0.06, 0]); // the north wall, facing south
-  for (let y = hi.top + 4; y < hi.bottom - 4; y += 11) walls.push([2 * TILE + 0.06, tc(y), Math.PI / 2]); // the west wall, facing east
+  for (let x = hi.left + 2; x < hi.hallR - 4; x += 9) walls.push([tc(x) + 4, (hi.top) * TILE + 0.06, 0]); // the north wall, facing south
+  for (let y = hi.top + 4; y < hi.bottom - 4; y += 11) walls.push([hi.left * TILE + 0.06, tc(y), Math.PI / 2]); // the west wall, facing east
   rng.shuffle(walls);
+  const signM = new THREE.MeshPhongMaterial({ map: atlasTex(SIGNS, 1024, 250, drawSign), shininess: 15 });
   walls.slice(0, 6).forEach(([x, z, yaw], i) => {
-    const [a, b2] = SIGNS[i % SIGNS.length];
-    const sign = new THREE.Mesh(geo('signBoard', () => new THREE.BoxGeometry(9, 2.2, 0.06)), new THREE.MeshPhongMaterial({ map: signTex(a, b2, i), shininess: 15 }));
+    const sign = new THREE.Mesh(cellGeo(new THREE.BoxGeometry(9, 2.2, 0.06), i % SIGNS.length, signM.map.userData.grid), signM);
     put(sign, x + Math.sin(yaw) * 0.03, 7.8 + (i % 2) * 0.5, z + Math.cos(yaw) * 0.03, yaw); // (above the catwalks' rails)
   });
 
   // ---- pipe runs under the roof, the length of the hall, on hangers from the trusses ----
-  for (const px of [tc(2 + (hi.zw >> 1)), tc(2 + hi.zw + hi.gap + (hi.zw >> 1)), tc(2 + 2 * (hi.zw + hi.gap) + (hi.zw >> 1))]) {
+  for (const px of [tc(hi.left + (hi.zw >> 1)), tc(hi.left + hi.zw + hi.gap + (hi.zw >> 1)), tc(hi.left + 2 * (hi.zw + hi.gap) + (hi.zw >> 1))]) {
     const len = (hi.bottom - hi.top + 1) * TILE, cz = (hi.top + hi.bottom + 1) / 2 * TILE;
     for (const [off, r, m] of [[0, 0.22, M.grey2], [0.6, 0.12, red]]) { const p2 = mesh(cyl(r, r, len, 12), m); p2.rotation.x = Math.PI / 2; put(p2, px + off, CEIL - 2.6, cz); }
     for (let z = hi.top * TILE + 3; z < (hi.bottom + 1) * TILE; z += 6) group.add(rod(dark, px + 0.3, z, CEIL - 2.4, CEIL - 1.5, 0.02));
   }
 
   // ---- the overhead line: a chain conveyor of hooks round the middle of the hall, running until the line is stopped ----
-  const xa = tc(2 + hi.zw + 1), xb = tc(hi.hallR), za = (hi.top + hi.zh + 1) * TILE, zb = (hi.top + 3 * (hi.zh + hi.gap) - hi.gap + 1) * TILE, railY = 4.6;
+  const xa = tc(hi.left + hi.zw + 1), xb = tc(hi.hallR), za = (hi.top + hi.zh + 1) * TILE, zb = (hi.top + 3 * (hi.zh + hi.gap) - hi.gap + 1) * TILE, railY = 4.6;
   const legs = [[xa, za, xb, za], [xb, za, xb, zb], [xb, zb, xa, zb], [xa, zb, xa, za]];
   let perim = 0;
   for (const [x1, z1, x2, z2] of legs) {
@@ -249,7 +257,7 @@ function dress(L, mats, group, out, h) {
   const meatG = geo('lineMeat', () => new THREE.CapsuleGeometry(0.17, 0.75, 4, 10).translate(0, -1.32, 0));
   const meatN = Math.ceil(nHooks / 3);
   const iHook = new THREE.InstancedMesh(hookG, dark, nHooks), iDrop = new THREE.InstancedMesh(dropG, chain, nHooks), iMeat = new THREE.InstancedMesh(meatG, M.wrapMeat, meatN);
-  for (const im of [iHook, iDrop, iMeat]) { im.frustumCulled = false; im.castShadow = true; group.add(im); }
+  for (const im of [iHook, iDrop, iMeat]) { im.frustumCulled = false; im.castShadow = false; group.add(im); } // (unculled: no shadow passes for them)
   const at2 = (d) => { d = ((d % perim) + perim) % perim; for (const [x1, z1, x2, z2] of legs) { const len = Math.hypot(x2 - x1, z2 - z1); if (d <= len) return [x1 + (x2 - x1) * d / len, z1 + (z2 - z1) * d / len, Math.atan2(x2 - x1, z2 - z1)]; d -= len; } return [xa, za, 0]; };
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   const line = { off: 0, speed: 0, sway: 0, t: 0, beacons, hooks: [iHook, iDrop, iMeat] }; // (held here, so the baker leaves them alone)
@@ -278,7 +286,7 @@ function dress(L, mats, group, out, h) {
 
   // ---- lockers against the columns and the outer walls: there's nowhere else to hide out here ----
   const spots = [];
-  for (let y = hi.top; y <= hi.bottom; y++) for (let x = 2; x <= hi.hallR; x++) {
+  for (let y = hi.top; y <= hi.bottom; y++) for (let x = hi.left; x <= hi.hallR; x++) {
     const i = y * W + x;
     if (!L.grid[i] || L.block[i] || h.used.has(x + ',' + y) || L.roomOf[i] === 0) continue;
     if (L.door && Math.abs(L.door.x - x) + Math.abs(L.door.y - y) <= 2) continue;
@@ -288,7 +296,7 @@ function dress(L, mats, group, out, h) {
   rng.shuffle(spots);
   let n = 0;
   for (const [x, y, s] of spots) {
-    if (n >= 18) break;
+    if (n >= 4) break; // (only a few: out here you are meant to keep moving)
     if (h.used.has(x + ',' + y)) continue;
     // never two side by side (and never blocking an aisle's only lane: the tile beside a column stays walkable, the
     // locker stands in its back half)
@@ -314,20 +322,29 @@ function floorMark(group, mat, x, z, w, d, yaw, alongZ = -1) {
   group.add(m);
   return m;
 }
-// a stencilled bay number for a column
-function labelTex(text) {
-  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+// several labels painted into one texture, one row each in a grid; cellGeo points a geometry's UVs at one of them
+function atlasTex(items, cw, ch, draw) {
+  const cols = Math.max(1, Math.floor(2048 / cw)), rows = Math.ceil(items.length / cols);
+  const c = document.createElement('canvas'); c.width = cw * Math.min(cols, items.length); c.height = ch * rows;
   const g = c.getContext('2d');
+  items.forEach((it, i) => { g.save(); g.translate((i % cols) * cw, ((i / cols) | 0) * ch); g.beginPath(); g.rect(0, 0, cw, ch); g.clip(); draw(g, it, i, cw, ch); g.restore(); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.userData.floorOnly = true;
+  t.userData.grid = { cols: Math.min(cols, items.length), rows };
+  return t;
+}
+function cellGeo(g, i, { cols, rows }) {
+  const u0 = (i % cols) / cols, v0 = 1 - (((i / cols) | 0) + 1) / rows, uv = g.attributes.uv;
+  for (let k = 0; k < uv.count; k++) uv.setXY(k, u0 + uv.getX(k) / cols, v0 + uv.getY(k) / rows);
+  return g;
+}
+// a stencilled bay number
+function drawLabel(g, text) {
   g.fillStyle = '#e6e2da'; g.fillRect(0, 0, 128, 64);
   g.fillStyle = '#9a1612'; g.fillRect(0, 0, 128, 8); g.fillRect(0, 56, 128, 8);
   g.fillStyle = '#1a1a18'; g.font = 'bold 34px "Arial Black", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 64, 33);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.userData.floorOnly = true;
-  return t;
 }
 // a painted sign board: big red letters on white, one line of smaller black under it
-function signTex(a, b, seed) {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 250;
-  const g = c.getContext('2d');
+function drawSign(g, [a, b], seed) {
   g.fillStyle = '#e8e4dc'; g.fillRect(0, 0, 1024, 250);
   g.fillStyle = '#9a1612'; g.fillRect(0, 0, 1024, 18); g.fillRect(0, 232, 1024, 18);
   g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -335,8 +352,6 @@ function signTex(a, b, seed) {
   g.fillStyle = '#1c1c1a'; g.font = 'bold 44px Arial, sans-serif'; g.fillText(b, 512, 188);
   let s = seed * 9301 + 49297; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
   for (let i = 0; i < 24; i++) { g.fillStyle = `rgba(90,80,70,${r() * 0.18})`; g.fillRect(r() * 1024, r() * 250, 2 + r() * 6, 20 + r() * 120); } // weather running down it
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.userData.floorOnly = true;
-  return t;
 }
 let MATS = null;
 function hallMats(mats) {
@@ -345,13 +360,13 @@ function hallMats(mats) {
   const decal = (map) => new THREE.MeshPhongMaterial({ map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, shininess: 30 });
   MATS = {
     src: mats,
-    galv: new THREE.MeshPhongMaterial({ color: 0x9aa2a6, shininess: 70, specular: 0x8a9094 }),
-    grey: new THREE.MeshPhongMaterial({ color: 0x5e666a, shininess: 45, specular: 0x55595c }),
-    paint: new THREE.MeshPhongMaterial({ color: 0x7c8488, shininess: 35, specular: 0x44484a }),
+    galv: new THREE.MeshPhongMaterial({ color: 0x5a6266, shininess: 70, specular: 0x6a7074 }),
+    grey: new THREE.MeshPhongMaterial({ color: 0x30363a, shininess: 45, specular: 0x45494c }),
+    paint: new THREE.MeshPhongMaterial({ color: 0x40484c, shininess: 35, specular: 0x3a3e40 }),
     red: new THREE.MeshPhongMaterial({ color: 0x9a1812, shininess: 50, specular: 0x553330 }),
-    grey2: new THREE.MeshPhongMaterial({ color: 0x8c9296, shininess: 40, specular: 0x55595c }),
+    grey2: new THREE.MeshPhongMaterial({ color: 0x5a6064, shininess: 40, specular: 0x45494c }),
     wood: new THREE.MeshPhongMaterial({ color: 0x6a5a44, shininess: 5 }),
-    wrap: new THREE.MeshPhongMaterial({ color: 0xc8c4bc, shininess: 90, specular: 0x9a9a9a, transparent: true, opacity: 0.92 }),
+    wrap: new THREE.MeshPhongMaterial({ color: 0xb4b0a8, shininess: 90, specular: 0x9a9a9a }), // (opaque: see-through film over every pallet cost too much)
     wrapMeat: new THREE.MeshPhongMaterial({ color: 0x8a2a24, shininess: 90, specular: 0x8a6a66 }),
     beacon: new THREE.MeshBasicMaterial({ color: 0xc81a10, transparent: true, opacity: 0.85 }),
     beaconHot: new THREE.MeshBasicMaterial({ color: 0xff6a50 }),

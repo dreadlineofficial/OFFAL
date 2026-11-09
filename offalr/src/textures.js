@@ -789,9 +789,9 @@ const ribs = (g, x0, w, y0, h, base, rib = 16) => { // standing-seam cladding: a
 function plant98WallCanvas(gore) {
   const W = 256, H = 384, { c, g } = hq(W, H), rng = makeRng(1994 + gore * 13);
   const plinth = H - 154; // the bottom 1.2 m is poured concrete
-  ribs(g, 0, W, 0, plinth, [196, 200, 200]);
+  ribs(g, 0, W, 0, plinth, [116, 122, 126]); // (dark steel)
   g.fillStyle = 'rgba(60,64,66,.5)'; g.fillRect(0, plinth - 6, W, 6); // the flashing over the plinth
-  g.fillStyle = '#d8dcdc'; g.fillRect(0, plinth - 10, W, 4);
+  g.fillStyle = '#8a9094'; g.fillRect(0, plinth - 10, W, 4);
   for (let x = 6; x < W; x += 32) { g.fillStyle = '#7a8084'; g.fillRect(x, 20, 3, 3); g.fillRect(x, plinth - 30, 3, 3); } // fixings
   streaks(g, W, plinth, 10, '90,84,76', 0.18, rng, true); // a little weather off the fixings: it's newer, not new
   g.fillStyle = '#9c9e9a'; g.fillRect(0, plinth, W, H - plinth);
@@ -807,7 +807,7 @@ function plant98WallCanvas(gore) {
 }
 function plant98UpperCanvas() { // the cladding all the way up to the roof
   const W = 256, H = 384, { c, g } = hq(W, H), rng = makeRng(1995);
-  ribs(g, 0, W, 0, H, [184, 188, 190]);
+  ribs(g, 0, W, 0, H, [100, 106, 110]);
   g.fillStyle = 'rgba(50,54,56,.55)'; g.fillRect(0, H - 4, W, 4); // the panel lap
   for (let x = 6; x < W; x += 32) { g.fillStyle = '#7a8084'; g.fillRect(x, 10, 3, 3); g.fillRect(x, H - 14, 3, 3); }
   streaks(g, W, H, 12, '80,74,66', 0.16, rng, true);
@@ -837,7 +837,7 @@ function plant98CeilCanvas() { // a galvanised trapezoidal deck, seen from below
   const S = 256, { c, g } = hq(S, S), rng = makeRng(1997);
   for (let x = 0; x < S; x += 32) {
     const gr = g.createLinearGradient(x, 0, x + 32, 0);
-    gr.addColorStop(0, '#6e7476'); gr.addColorStop(0.25, '#9ea4a6'); gr.addColorStop(0.5, '#868c8e'); gr.addColorStop(0.75, '#5a6062'); gr.addColorStop(1, '#6e7476');
+    gr.addColorStop(0, '#3e4446'); gr.addColorStop(0.25, '#646a6c'); gr.addColorStop(0.5, '#52585a'); gr.addColorStop(0.75, '#33393b'); gr.addColorStop(1, '#3e4446');
     g.fillStyle = gr; g.fillRect(x, 0, 32, S);
   }
   blotches(g, S, S, 50, 6, 30, '60,58,52', 0.25, rng);

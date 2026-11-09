@@ -162,13 +162,15 @@ function hallRooms(c) {
   const lw = 4, lh = 3, lx = (W >> 1) - 2 + rng.int(-3, 3), ly = H - 2 - lh;
   rooms.push({ x: lx, y: ly, w: lw, h: lh, type: 'lift' });
   const ax = lx + rng.int(1, lw - 2), ay = H - 2;
-  const top = 2, bottom = ly - 1, annexW = 10, ex0 = W - 2 - annexW, hallR = ex0 - 2; // ex0 - 1 is the dividing wall
+  // a strip of small rooms (4 deep) runs along the north and west walls; the hall starts past them
+  const strip = 4, left = 2 + strip + 1, top = 2 + strip + 1, bottom = ly - 1, annexW = 10, ex0 = W - 2 - annexW, hallR = ex0 - 2; // ex0 - 1 is the dividing wall
+  const low = (c.low = new Uint8Array(W * H)); // tiles under a 3 m ceiling (the small rooms and their doors)
   const set = (x, y, corr, ri = -1) => { const i = y * W + x; grid[i] = 1; if (corr) corridor[i] = 1; if (ri >= 0) roomOf[i] = ri; };
   // the hall: aisles everywhere first, then the work areas laid over them
-  for (let y = top; y <= bottom; y++) for (let x = 2; x <= hallR; x++) set(x, y, true);
+  for (let y = top; y <= bottom; y++) for (let x = left; x <= hallR; x++) set(x, y, true);
   const zw = 9, zh = 8, gap = 2;
   for (let zy = top; zy + zh - 1 <= bottom - 1; zy += zh + gap) {
-    for (let zx = 2; zx + zw - 1 <= hallR - 1; zx += zw + gap) {
+    for (let zx = left; zx + zw - 1 <= hallR - 1; zx += zw + gap) {
       const ri = rooms.length;
       rooms.push({ x: zx, y: zy, w: zw, h: zh, type: '' });
       for (let y = zy; y < zy + zh; y++) for (let x = zx; x < zx + zw; x++) { const i = y * W + x; corridor[i] = 0; roomOf[i] = ri; }
@@ -177,7 +179,7 @@ function hallRooms(c) {
   // the lift bay, open to the hall along its top
   for (let y = ly; y < ly + lh; y++) for (let x = lx; x < lx + lw; x++) { const i = y * W + x; grid[i] = 1; corridor[i] = 0; roomOf[i] = 0; }
   // the columns: a line down the near lane of every aisle between work areas, one every five tiles
-  for (let x = 2 + zw; x < hallR; x += zw + gap) for (let y = top + 3; y <= bottom - 1; y += 5) { const i = y * W + x; grid[i] = 0; corridor[i] = 0; }
+  for (let x = left + zw; x < hallR; x += zw + gap) for (let y = top + 3; y <= bottom - 1; y += 5) { const i = y * W + x; grid[i] = 0; corridor[i] = 0; }
   // the annex: two big rooms, one above the other, joined by a wide opening; one door from the hall
   const mid = top + ((bottom - top) >> 1);
   const A = rooms.length; rooms.push({ x: ex0, y: mid + 1, w: annexW, h: bottom - mid, type: '' });
@@ -186,8 +188,19 @@ function hallRooms(c) {
   for (let x = ex0 + 3; x < ex0 + 6; x++) set(x, mid, true); // the opening between them
   const dy = rng.int(mid + 3, bottom - 3);
   set(ex0 - 1, dy, true); // the door through the dividing wall
+  // the small rooms: offices, a break room, a cold store, a cutting room... each one door onto the hall
+  const kinds = rng.shuffle(['office', 'breakroom', 'freezer', 'butcher', 'office', 'morgue', 'bunks', 'copy', 'shrine', 'office', 'meeting', 'butcher']);
+  let kk = 0;
+  const small = (x, y, w, h, [doorX, doorY]) => {
+    const ri = rooms.length;
+    rooms.push({ x, y, w, h, type: kinds[kk++ % kinds.length], fixed: true });
+    for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) { set(xx, yy, false, ri); low[yy * W + xx] = 1; }
+    set(doorX, doorY, true); low[doorY * W + doorX] = 1;
+  };
+  for (let x = left; ;) { const w = rng.int(4, 6); if (x + w - 1 > hallR) break; if (rng() < 0.85) small(x, 2, w, strip, [x + (w >> 1), 2 + strip]); x += w + 1; }
+  for (let y = top; ;) { const h = rng.int(4, 6); if (y + h - 1 > bottom) break; if (rng() < 0.85) small(2, y, strip, h, [2 + strip, y + (h >> 1)]); y += h + 1; }
   rooms.forEach((r) => { r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1); });
-  c.hallInfo = { top, bottom, hallR, ex0, annexW, zw, zh, gap };
+  c.hallInfo = { left, top, bottom, hallR, ex0, annexW, zw, zh, gap };
   return { ax, ay };
 }
 
@@ -364,6 +377,7 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     const pool = D.pool || ['cold', 'butcher', 'lockers', 'morgue', 'pit']; // (some floors bring their own kinds of room)
     rng.shuffle(others);
     others.forEach((r, i) => {
+      if (r.fixed) return; // (the factory floor's small rooms come with their job)
       if (i < pool.length) r.type = pool[i];
       else r.type = D.pool ? rng.pick(D.pool) : r.w * r.h >= 16 ? rng.pick(['cold', 'cold', 'butcher', 'pit']) : rng.pick(['butcher', 'lockers', 'morgue']);
       if (r.type === 'cold' && r.w * r.h < 12) r.type = 'butcher';
@@ -405,7 +419,7 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     for (let i = 0; i < W * H; i++) if (corridor[i] && !crawl[i]) water[i] = 1;
     rooms.forEach((r, ri) => { if (r.type === 'cistern') for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) water[y * W + x] = 1; });
   }
-  return { depth, seed, W, H, grid, roomOf, corridor, crawl, water, theme, rooms, alcove: { x: ax, y: ay }, dist, block: new Uint8Array(W * H), D, hall: !!D.hall, hallInfo: c.hallInfo, ceil: Math.max(WALL_H, D.ceil || 0) };
+  return { depth, seed, W, H, grid, roomOf, corridor, crawl, water, theme, rooms, alcove: { x: ax, y: ay }, dist, block: new Uint8Array(W * H), D, hall: !!D.hall, hallInfo: c.hallInfo, low: c.low, ceil: Math.max(WALL_H, D.ceil || 0) };
 }
 
 // ---------- geometry ----------
@@ -445,6 +459,7 @@ export function buildLevel(L, mats) {
   // row only. The lift's alcove and the shutter's doorway keep a 3 m ceiling, with wall over their mouths up to the roof)
   const CEIL = L.ceil || WALL_H, low = new Set([L.alcove.y * W + L.alcove.x]);
   if (CEIL > WALL_H && L.door) low.add(L.door.y * W + L.door.x);
+  if (L.low) for (let i = 0; i < W * H; i++) if (L.low[i]) low.add(i);
   const UPPER = 99; // (the panels above the first 3 m: their own surface where the floor has one)
   const stack = (k, p0, r, n) => { k = UPPER; for (let h = WALL_H; h < CEIL - 0.01; h += WALL_H) buf(wallBufs, k).quad([p0[0], h, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, Math.min(WALL_H, CEIL - h), 0], n, (h / WALL_H) % 2 === 1); };
   const wallBufs = new Map(), floorBufs = new Map(), ceil = new Geo();
@@ -808,7 +823,7 @@ export function buildLevel(L, mats) {
           const rail = P2.overheadRail(mats, rng, railLen, WALL_H);
           add(rail, along ? ax0 + railLen / 2 : ax0, along ? az0 : az0 + railLen / 2, along ? 0 : Math.PI / 2);
           for (let d = 1.2; d < railLen - 0.6; d += 1.6 + rng() * 1.6) {
-            if (rng() < 0.35) continue;
+            if (rng() < 0.35 || L.hall) continue; // (the factory floor: the meat is on the overhead line, hall.js)
             const hx = along ? ax0 + d : ax0, hz = along ? az0 : az0 + d;
             const c2 = add(P.makeCarcass(mats, rng, rng() < 0.2), hx, hz, rng() * 6);
             c2.position.y = WALL_H - 0.25;
@@ -1007,7 +1022,7 @@ export function buildLevel(L, mats) {
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) out.bloodTiles[y * W + x] = 1;
     }
     // lockers (the floors with lots of small rooms would otherwise be wall to wall with them)
-    const lockerCap = L.theme && L.theme !== 'plant' ? 20 : Infinity;
+    const lockerCap = L.hall ? 5 : L.theme && L.theme !== 'plant' ? 20 : Infinity; // (the factory floor: only a few places to hide)
     if (out.lockers.length < lockerCap && (r.type === 'lockers' || (r.type !== 'lift' && rng() < (L.theme === 'morgue' ? 0.12 : 0.4)))) {
       const sides = [];
       for (const [x, y] of allTiles(r)) for (const s of wallSides(x, y)) sides.push([x, y, s]);
@@ -1037,7 +1052,7 @@ export function buildLevel(L, mats) {
   rng.shuffle(corridorTiles);
   const lampTiles = [];
   for (const [x, y] of corridorTiles) {
-    if (lampTiles.some(([lx, ly]) => Math.abs(lx - x) + Math.abs(ly - y) < 5)) continue;
+    if (lampTiles.some(([lx, ly]) => Math.abs(lx - x) + Math.abs(ly - y) < (L.hall ? 9 : 5))) continue;
     lampTiles.push([x, y]);
     lampAt(tileCenter(x), tileCenter(y), 'bulb', -1);
   }

@@ -59,13 +59,14 @@ function dress(L, mats, group, theme) {
       // pipe runs up under the ceiling: one or two pipes, a flange at every joint, a bracket holding them to the wall
       if (runOf(i, k + 8, corridor ? 0.6 : 0.45)) {
         const two = runOf(i, k + 16, 0.5);
+        const ch = L.low && L.low[i] ? WALL_H : CH; // (under a small room's own 3 m ceiling)
         for (let p = 0; p < (two ? 2 : 1); p++) {
-          const r = p ? 0.032 : 0.05, off = p ? 0.24 : 0.12, h = CH - (p ? 0.36 : 0.2);
+          const r = p ? 0.032 : 0.05, off = p ? 0.24 : 0.12, h = ch - (p ? 0.36 : 0.2);
           put(along(TILE, r, pipeMat), fx + nx * off, h, fz + nz * off, yaw);
           put(along(0.035, r * 1.45, pipeMat, 16), fx + nx * off - ax * TILE / 2, h, fz + nz * off - az * TILE / 2, yaw);
           if (rng() < 0.35) put(along(0.03, r * 1.3, mats.chain, 12), fx + nx * off + ax * 0.2, h, fz + nz * off + az * 0.2, yaw); // a band clamp
         }
-        put(P.mesh(P.box(0.04, 0.04, two ? 0.28 : 0.15), pipeMat, false), fx + nx * (two ? 0.14 : 0.075), CH - 0.14, fz + nz * (two ? 0.14 : 0.075), yaw);
+        put(P.mesh(P.box(0.04, 0.04, two ? 0.28 : 0.15), pipeMat, false), fx + nx * (two ? 0.14 : 0.075), ch - 0.14, fz + nz * (two ? 0.14 : 0.075), yaw);
       }
     }
     // steel frames where a corridor opens into a room
