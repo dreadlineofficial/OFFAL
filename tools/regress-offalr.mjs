@@ -13,7 +13,7 @@ const check = async (name, fn, arg) => {
   res.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${r && r.info ? '  ' + r.info : ''}${!ok ? '  ' + ((r && r.why) || '') + ' ' + errs.slice(n).join(' | ').slice(0, 300) : ''}`);
 };
 // a run up to play, ghosted so nothing kills the pass mid-check
-const enter = `(mode, floor, diff) => { const o = window.__offal; o.G.state = 'menu'; o.startRun(mode, true, diff || 'normal', { floor }); let k = 0; while (o.G.state === 'transition' && k++ < 900) o.updateTransition(0.05); o.G.dev = { ghost: true }; o.player.inLift = false; return o.G.state; }`;
+const enter = `(mode, floor, diff) => { const o = window.__offal; o.G.state = 'menu'; o.startRun(mode, true, diff || 'normal', { floor }); let k = 0; while (o.G.state === 'transition' && k++ < 900) (o.G.warming = false, o.updateTransition(0.05)); o.G.dev = { ghost: true }; o.player.inLift = false; return o.G.state; }`;
 await check('menu: no Crew, no Play as the Foreman', () => ({ ok: !document.getElementById('lobby') && !document.querySelector('[data-act=lobby]') && !document.getElementById('btnHunt') && !document.querySelector('[data-act=hunt]') }));
 for (let f = 0; f <= 10; f++) {
   await check(`story floor ${f}`, new Function('f', `const enter = ${enter}; const st = enter('story', f); const o = window.__offal; if (st !== 'play' && st !== 'letter') return { ok: false, why: 'state ' + st };
@@ -30,11 +30,11 @@ await check('floor teardown keeps shared textures', new Function(`const enter = 
   let bad = 0;
   try { for (const f of [3, 3, 4, 6, 8, 3, 7, 1]) { enter('story', f); o.scene.traverse((x) => { for (const m of [].concat(x.material || [])) for (const k in m) if (m[k] && m[k].isTexture && gone.has(m[k])) bad++; }); } } finally { P.dispose = orig; }
   return { ok: bad === 0, info: bad + ' freed textures back in use' };`));
-await check('next floor via the lift', new Function(`const enter = ${enter}; enter('story', 2); const o = window.__offal; o.nextFloor(); let k = 0; while (o.G.state === 'transition' && k++ < 900) o.updateTransition(0.05); return { ok: o.G.depth === 3 && o.G.state === 'play' };`));
+await check('next floor via the lift', new Function(`const enter = ${enter}; enter('story', 2); const o = window.__offal; o.nextFloor(); let k = 0; while (o.G.state === 'transition' && k++ < 900) (o.G.warming = false, o.updateTransition(0.05)); return { ok: o.G.depth === 3 && o.G.state === 'play' };`));
 await check('overtime, hard', new Function(`return (${enter})('overtime', 3, 'hard') === 'play' && window.__offal.step(1 / 30, 200) === 'play' ? { ok: true } : { ok: false };`));
 await check('save + resume mid-floor', new Function(`const enter = ${enter}; enter('story', 4); const o = window.__offal; o.step(1 / 30, 60); o.player.pos.x += 1.5; const x = o.player.pos.x;
   o.G.saveT = -1; o.step(1 / 30, 2); const snap = o.save.snap; if (!snap) return { ok: false, why: 'no snapshot' };
-  o.G.state = 'menu'; o.startRun('story', false, null, { resume: snap }); let k = 0; while (o.G.state === 'transition' && k++ < 900) o.updateTransition(0.05);
+  o.G.state = 'menu'; o.startRun('story', false, null, { resume: snap }); let k = 0; while (o.G.state === 'transition' && k++ < 900) (o.G.warming = false, o.updateTransition(0.05));
   return { ok: o.G.depth === 4 && Math.abs(o.player.pos.x - x) < 0.6, info: 'dx ' + Math.abs(o.player.pos.x - x).toFixed(2) };`));
 await check('lockers: first is the scare, then hide/unhide works', new Function(`const enter = ${enter}; enter('overtime', 3); const o = window.__offal, B = o.G.B;
   const first = o.G.lockerScare; const lk = B.lockers[0]; o.openFilled(lk); const free = B.lockers.find((l) => !l.filled);

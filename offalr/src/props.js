@@ -1050,7 +1050,14 @@ function sheetMatR(mats) {
     g.strokeStyle = r() < 0.5 ? `rgba(70,60,48,${0.05 + r() * 0.07})` : `rgba(235,228,214,${0.05 + r() * 0.08})`;
     g.lineWidth = 0.6; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
   }
-  const soft = (x, y, rx, ry, col, blur) => { g.save(); g.filter = `blur(${blur}px)`; g.fillStyle = col; g.beginPath(); g.ellipse(x, y, rx, ry, r() * 3, 0, Math.PI * 2); g.fill(); g.restore(); };
+  // a soft stain: an ellipse whose edge fades out over `blur` px (a radial gradient: a blur filter per stain painted
+  // in software took seconds, and froze the floor's card the first time a sheet was needed)
+  const soft = (x, y, rx, ry, col, blur) => {
+    const ex = rx + blur, ey = ry + blur, k = Math.max(0, Math.min(0.95, 1 - (2 * blur) / Math.max(ex, 1)));
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1), clear = col.replace(/[\d.]+\)$/, '0)');
+    gr.addColorStop(0, col); gr.addColorStop(k, col); gr.addColorStop(1, clear);
+    g.save(); g.translate(x, y); g.rotate(r() * 3); g.scale(ex, ey); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 1, 0, Math.PI * 2); g.fill(); g.restore();
+  };
   for (let i = 0; i < 40; i++) soft(r() * W, r() * H, 40 + r() * 160, 30 + r() * 120, `rgba(120,104,80,${0.04 + r() * 0.05})`, 30); // washed-out old stains
   // what's soaked through from underneath: a wide diluted halo, wicked out unevenly along the threads, then the
   // darker blood nearer the wound, then the darkest where it pooled. All soft: blood in cloth has no outline

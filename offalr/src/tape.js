@@ -15,12 +15,13 @@ const MESSAGE = [
 ];
 // the tape is a run of plain static cards, white and red, cut hard from one to the next with a burst of snow between
 // (no movement in them at all: just the tape's own wear over the top). Each line of the message is a card
-const WHITE = '#f2efe8', RED = '#c4100c';
+const WHITE = '#f2efe8', RED = '#c4100c', BLACK = '#050505'; // (white and red on black)
 const CARDS = [
-  { kind: 'slate', dur: 4.5 },
-  { kind: 'title', dur: 4.2, tone: true },
-  ...MESSAGE.slice(0, 5).map((text, i) => ({ kind: 'text', ids: [i], text, dur: Math.max(4, text.length / 11 + 2.2), red: i === 2, pic: ['', 'figure', '', 'warn', ''][i] })),
-  { kind: 'text', ids: [5, 6], text: MESSAGE[5] + '\n' + MESSAGE[6], dur: 5, sign: true },
+  { kind: 'slate', dur: 3 },
+  { kind: 'title', dur: 3, tone: true },
+  // (the longest a card can stay up; with a voice it cuts to the next one a beat after the line is read)
+  ...MESSAGE.slice(0, 5).map((text, i) => ({ kind: 'text', ids: [i], text, dur: Math.max(3, text.length / 16 + 1.4), red: i === 2, pic: ['', 'figure', '', 'warn', ''][i] })),
+  { kind: 'text', ids: [5, 6], text: MESSAGE[5] + '\n' + MESSAGE[6], dur: 4, sign: true },
 ];
 const T_CARDS = 1.6, GAP = 0.32; // (the VCR's blue first; snow between cards)
 { let at = T_CARDS; for (const c of CARDS) { c.at = at; at += c.dur + GAP; } }
@@ -142,11 +143,11 @@ function figure(g, x, y, col) { // him: a hunched shape in an apron, a cleaver h
   g.fillRect(x - 24, y - 22, 18, 22); g.fillRect(x + 8, y - 22, 18, 22);
   g.fillRect(x - 46, y - 92, 14, 78); g.fillRect(x + 36, y - 88, 14, 80);
   g.fillRect(x + 30, y - 10, 34, 22); // the cleaver
-  g.fillStyle = WHITE; g.fillRect(x + 4, y - 124, 6, 4); g.fillRect(x + 18, y - 124, 6, 4); // two holes for eyes
+  g.fillStyle = BLACK; g.fillRect(x + 4, y - 124, 6, 4); g.fillRect(x + 18, y - 124, 6, 4); // two holes for eyes
 }
 function warn(g, x, y, s, col) {
   g.fillStyle = col; g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s * 1.1, y + s * 0.8); g.lineTo(x - s * 1.1, y + s * 0.8); g.closePath(); g.fill();
-  g.fillStyle = WHITE; g.beginPath(); g.moveTo(x, y - s * 0.62); g.lineTo(x + s * 0.76, y + s * 0.6); g.lineTo(x - s * 0.76, y + s * 0.6); g.closePath(); g.fill();
+  g.fillStyle = BLACK; g.beginPath(); g.moveTo(x, y - s * 0.62); g.lineTo(x + s * 0.76, y + s * 0.6); g.lineTo(x - s * 0.76, y + s * 0.6); g.closePath(); g.fill();
   g.fillStyle = col; g.fillRect(x - s * 0.08, y - s * 0.3, s * 0.16, s * 0.55); g.fillRect(x - s * 0.08, y + s * 0.34, s * 0.16, s * 0.15);
 }
 function pine(g, x, y, s, col) {
@@ -157,30 +158,30 @@ function pine(g, x, y, s, col) {
 function card(g, c) {
   g.textAlign = 'center';
   if (c.kind === 'slate') {
-    g.fillStyle = WHITE; g.fillRect(0, 0, W, H);
+    g.fillStyle = BLACK; g.fillRect(0, 0, W, H);
     pine(g, W / 2, 130, 1.6, RED);
     g.fillStyle = RED; g.font = 'bold 44px Arial, Helvetica, sans-serif'; g.fillText('HOLLOW PINES', W / 2, 300);
     g.font = 'bold 22px Arial, Helvetica, sans-serif'; g.fillText('M E A T W O R K S', W / 2, 332);
-    g.fillStyle = '#222'; g.font = '20px Arial, Helvetica, sans-serif'; g.fillText('1998, October 30th', W / 2, 400);
+    g.fillStyle = WHITE; g.font = '20px Arial, Helvetica, sans-serif'; g.fillText('1998, October 30th', W / 2, 400);
     return;
   }
   if (c.kind === 'title') {
-    g.fillStyle = RED; g.fillRect(0, 0, W, H);
-    g.fillStyle = WHITE; g.font = 'bold 64px Arial, Helvetica, sans-serif'; g.fillText('IMPORTANT', W / 2, 220); g.fillText('STAFF MESSAGE', W / 2, 292);
-    g.fillRect(90, 320, W - 180, 6);
+    g.fillStyle = BLACK; g.fillRect(0, 0, W, H);
+    g.fillStyle = RED; g.font = 'bold 64px Arial, Helvetica, sans-serif'; g.fillText('IMPORTANT', W / 2, 220); g.fillText('STAFF MESSAGE', W / 2, 292);
+    g.fillStyle = WHITE; g.fillRect(90, 320, W - 180, 6);
     return;
   }
-  const bg = c.red ? RED : WHITE, fg = c.red ? WHITE : RED;
-  g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  g.fillStyle = fg; g.fillRect(0, 0, W, 10); g.fillRect(0, H - 10, W, 10); // a band top and bottom
+  const fg = c.red ? RED : WHITE; // black always; the one line that matters in red
+  g.fillStyle = BLACK; g.fillRect(0, 0, W, H);
+  g.fillStyle = RED; g.fillRect(0, 0, W, 10); g.fillRect(0, H - 10, W, 10); // a band top and bottom
   let x = W / 2, maxW = W - 120;
-  if (c.pic === 'figure') { figure(g, 150, 360, fg); x = 400; maxW = 330; }
-  if (c.pic === 'warn') { warn(g, 140, 230, 80, fg); x = 400; maxW = 330; }
+  if (c.pic === 'figure') { figure(g, 150, 360, RED); x = 400; maxW = 330; }
+  if (c.pic === 'warn') { warn(g, 140, 230, 80, RED); x = 400; maxW = 330; }
   g.font = c.sign ? 'bold 40px Arial, Helvetica, sans-serif' : c.red ? 'bold 46px Arial, Helvetica, sans-serif' : 'bold 30px Arial, Helvetica, sans-serif';
   const lines = wrap(g, c.text, maxW), lh = c.red || c.sign ? 54 : 40;
   g.fillStyle = fg;
   lines.forEach((l, i) => g.fillText(l, x, H / 2 + 10 + (i - (lines.length - 1) / 2) * lh));
-  if (c.sign) pine(g, W / 2, 80, 0.7, fg);
+  if (c.sign) pine(g, W / 2, 80, 0.7, RED);
 }
 
 function frame(g, t, seed) {
@@ -242,7 +243,7 @@ export class TapePlayer {
     } catch {}
   }
   play(onEnd) {
-    this.on = true; this.t = 0; this.seed = Math.random() * 100; this.onEnd = onEnd;
+    this.on = true; this.t = 0; this.seed = Math.random() * 100; this.onEnd = onEnd; this.card = null; this.talking = 0; this.saidAt = null; this.held = 0;
     this.el.classList.add('on');
     this.sound(true);
   }
@@ -261,11 +262,22 @@ export class TapePlayer {
     if (!this.on) return;
     const was = this.t;
     this.t += dt;
+    // a card stays up while its line is being read (up to 2.5 s past its time), and cuts a beat after the voice stops
+    const cur = CARDS.find((c) => was >= c.at && was < c.at + c.dur);
+    if (cur && cur.ids && this.card === cur) {
+      const end = cur.at + cur.dur - 0.02;
+      if (this.talking > 0 && this.t > end && (this.held += dt) < 2.5) this.t = end;
+      else if (this.saidAt != null && this.t >= this.saidAt + 0.6 && this.t < end) this.t = end;
+    }
     frame(this.g, this.t, this.seed);
     this.sg.drawImage(this.cv, 0, 0, 320, 240); this.tex.needsUpdate = true;
     // the tone under the title card; the voice reading each card as it comes up
     for (const c of CARDS) {
-      if (was < c.at && this.t >= c.at) { if (c.tone) this.beep(true); if (c.ids) for (const id of c.ids) this.speak(id); }
+      if (was < c.at && this.t >= c.at) {
+        if (c.tone) this.beep(true);
+        this.card = c; this.cardNo = (this.cardNo || 0) + 1; this.talking = 0; this.saidAt = null; this.held = 0;
+        if (c.ids) for (const id of c.ids) this.speak(id);
+      }
       if (c.tone && was < c.at + c.dur && this.t >= c.at + c.dur) this.beep(false);
     }
     if (this.t >= T_STOP) this.stop();
@@ -305,12 +317,19 @@ export class TapePlayer {
   speak(i) {
     try {
       const s = window.speechSynthesis; if (!s) return;
+      const no = this.cardNo;
       const say = (text, then) => {
         const u = new window.SpeechSynthesisUtterance(text);
-        u.rate = 0.8; u.pitch = 0.5; u.volume = Math.min(1, (this.audio && this.audio.volume) || 0.8);
+        // counted, so the card can move on when the voice is done (a line from a card already gone doesn't count)
+        // (only once it has really started: a system with no working voice just keeps the cards' own time)
+        let mine = false, over = false;
+        u.onstart = () => { if (no === this.cardNo && !over) { mine = true; this.talking++; } };
+        const fin = () => { if (over) return; over = true; if (mine && no === this.cardNo && --this.talking <= 0 && !then) this.saidAt = this.t; };
+        u.onerror = fin;
+        u.rate = 0.9; u.pitch = 0.5; u.volume = Math.min(1, (this.audio && this.audio.volume) || 0.8);
         const vs = s.getVoices(), v = vs.find((x) => /^en/i.test(x.lang) && /\b(david|daniel|george|fred|mark|alex)\b/i.test(x.name)) || vs.find((x) => /^en/i.test(x.lang));
         if (v) u.voice = v;
-        if (then) u.onend = then;
+        u.onend = () => { fin(); if (then) then(); };
         s.speak(u);
       };
       const text = MESSAGE[i];

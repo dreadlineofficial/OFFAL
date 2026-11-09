@@ -407,7 +407,7 @@ function loadFloor(depth, seed) {
   if (REMASTER && scene.fog.density * camera.far < 2.4) scene.fog.density = 2.4 / camera.far;
   camera.updateProjectionMatrix();
   warmShaders(scene, camera);
-  prepDeathFilm();
+  // (the death film is built a frame later, by updateTransition: one long frame here is the card freezing)
 }
 // every shader the floor needs, built now behind the load (in parallel where the GPU allows) rather than the first
 // time each thing comes into view, which is a stall in the middle of play
@@ -428,7 +428,31 @@ function blank() { renderer.setRenderTarget(null); renderer.setClearColor(0x0000
 function warmShaders(s, c) { // (until they're built the floor isn't drawn behind the lift card: drawing it would wait on every one of them at once)
   const id = (G.warmId = (G.warmId || 0) + 1); G.warming = true;
   const done = () => { if (G.warmId === id) G.warming = false; };
-  compileSoon(renderer, s, c, done); setTimeout(done, 8000);
+  let left = 2;
+  const one = () => { if (--left === 0) done(); };
+  compileSoon(renderer, s, c, one); uploadSoon([s], one); setTimeout(done, 10000);
+}
+// every texture the floor uses, sent to the GPU a few at a time behind the card. Left to the first draw, all of them
+// went up in one frame (seconds on a phone) and the card froze in the middle of its quote
+function texturesOf(roots) {
+  const out = new Set();
+  const add = (v) => { if (v && v.isTexture && !v.isRenderTargetTexture && v.image && !renderer.properties.get(v).__webglTexture) out.add(v); };
+  for (const r of roots) {
+    if (!r) continue;
+    if (r.environment) add(r.environment);
+    r.traverse((o) => { for (const m of [].concat(o.material || [])) for (const k in m) add(m[k]); });
+  }
+  return [...out];
+}
+function uploadSoon(roots, done = () => {}) {
+  const list = texturesOf(roots);
+  let i = 0;
+  const step = () => {
+    const t0 = performance.now();
+    while (i < list.length && performance.now() - t0 < 6) { try { renderer.initTexture(list[i]); } catch {} i++; }
+    if (i < list.length) setTimeout(step, 0); else done();
+  };
+  setTimeout(step, 0);
 }
 
 // what lies about on a floor that depends on the run: the next gun part you're missing, a few bolts, keepsakes
@@ -515,7 +539,17 @@ function lockPointer() {
 function updateTransition(dt) {
   const tr = G.trans;
   tr.t += dt;
-  if (tr.t >= 0.8 && !tr.loaded) {
+  // the card goes up first, so the build happens behind it and not on a black screen
+  if (tr.t >= 0.8 && !tr.carded) {
+    tr.carded = true;
+    const pre = floorInfo(tr.next, G.mode);
+    UI.$('cardB').textContent = pre.label;
+    UI.$('cardName').textContent = pre.name;
+    UI.$('cardQuote').textContent = '';
+    UI.only('card');
+    return;
+  }
+  if (tr.carded && !tr.loaded) {
     tr.loaded = true;
     audio.liftMotor(true);
     // story: the floor keeps its seed until you clear it, so a retry is the same floor you learned
@@ -543,7 +577,17 @@ function updateTransition(dt) {
     UI.$('cardName').textContent = info.name;
     UI.$('cardQuote').textContent = '';
     UI.only('card');
-    setTimeout(() => UI.typewrite(UI.$('cardQuote'), info.quote, 30, () => Math.random() < 0.5 && audio.tick()), 900);
+    tr.film = 1; // next frame: the death film for this floor
+    tr.quote = info.quote;
+    tr.t = Math.max(tr.t, 0.85); // the build's own time doesn't eat the card
+    return;
+  }
+  if (tr.film === 1) {
+    tr.film = 2;
+    prepDeathFilm();
+    if (G.nextCs) uploadSoon([G.nextCs.scene]);
+    setTimeout(() => G.trans === tr && UI.typewrite(UI.$('cardQuote'), tr.quote, 30, () => Math.random() < 0.5 && audio.tick()), 500);
+    return;
   }
   if (tr.loaded && tr.skip) { tr.skip = false; tr.t = Math.max(tr.t, 6); }
   if (tr.loaded) {
@@ -551,7 +595,7 @@ function updateTransition(dt) {
     player.applyCamera(dt, G);
     audio.listen(camera.position, player.forward());
   }
-  if (tr.t > 6) {
+  if (tr.t > 6 && !G.warming && tr.film === 2) {
     UI.only('hud');
     UI.$('fade').classList.remove('on');
     audio.liftMotor(false);
@@ -2184,6 +2228,19 @@ const fps = { on: false, n: 0, t: 0, el: null };
 // the graphics driver reset under us (Chromium restores WebGL and every texture re-uploads); counted on the F3 line
 let gpuResets = 0;
 canvas.addEventListener('webglcontextlost', () => { gpuResets++; window.console.warn('OFFAL: WebGL context lost'); });
+// back from a reset: three.js re-uploads every texture from its canvas by itself, but the lighting environment was drawn
+// into the GPU (a render target) and comes back empty, which leaves every surface lit only by the lamps: rebuild it
+canvas.addEventListener('webglcontextrestored', () => {
+  if (!REMASTER) return;
+  setTimeout(() => {
+    try {
+      const old = scene.environment, env = THREE.ownRandom(() => makeEnvironment(renderer));
+      scene.environment = env;
+      for (const cs of [G.nextCs, G.cutscene, G.replay]) if (cs && cs.scene && cs.scene.environment === old) cs.scene.environment = env;
+      if (G.B) warmShaders(scene, camera);
+    } catch (e) { window.console.warn('OFFAL: environment rebuild failed', e); }
+  }, 0);
+});
 addEventListener('keydown', (e) => {
   if (e.code !== 'F3') return;
   e.preventDefault();

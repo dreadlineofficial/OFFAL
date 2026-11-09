@@ -7,6 +7,21 @@ import { derivePBR } from './pbr.js';
 
 export * from '../../vendor/three/build/three.module.min.js';
 
+// every painted surface in the game is a 2D canvas, and every one must live in ordinary memory, not on the GPU:
+// a GPU-backed canvas can be blanked by the browser (memory pressure, a driver reset), and the next upload of it
+// is a black or see-through texture (walls going dark, normal/AO maps zeroed); reading one back to derive its
+// PBR maps also stalled each floor's build for seconds (getImageData waits on the GPU). Set before anything paints
+try {
+  const P = HTMLCanvasElement.prototype, get = P.getContext;
+  P.getContext = function (type, opts) {
+    return type === '2d' ? get.call(this, type, { ...(opts || {}), willReadFrequently: true }) : get.call(this, type, opts);
+  };
+  if (globalThis.OffscreenCanvas) {
+    const O = OffscreenCanvas.prototype, oget = O.getContext;
+    O.getContext = function (type, opts) { return type === '2d' ? oget.call(this, type, { ...(opts || {}), willReadFrequently: true }) : oget.call(this, type, opts); };
+  }
+} catch {}
+
 // the game's renderer, for things that photograph a little scene of their own (the family photo keepsake)
 export const studio = {};
 
