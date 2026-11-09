@@ -79,9 +79,19 @@ node tools/regress-offalr.mjs             # regression, needs the dev server; mu
 
 ## Current state (Nov 2026, v1.0.0)
 Done recently:
-- B10 rebuilt: 62 tiles, 20 big halls (`big`), and a chain (`chain`): fuses → keypad (wing) → kill switches (one in
-  the wing) → valves → `Override` (line control desk, far room) unlocks the lift; frenzy only after the override (4 s
-  head start). Later jobs show "LOCKED — FIRST: …"; notes/wall writing readable any time. Old B10 saves restart B10.
+- B10 = the main factory floor (`hall: true`, `ceil: 12`, size 56). `hallRooms` (level.js): one open hall of work
+  areas with no walls, 2-tile aisles with column lines, a lift bay, a walled 2-room annex (= the keypad wing), and
+  strips of small rooms along the north/west walls (`fixed` types; `L.low` tiles keep a 3 m ceiling, walls above their
+  doors). Walls stack 3 m panels to the roof (`TM.upper` above 3 m). `hall.js` dresses it: roof drops for anything hung
+  at WALL_H, trusses, red-railed catwalks, roof lamps, machines, clutter, column plates/beacons (atlas textures), wall
+  signs, roof pipes, floor lanes/hatching, and the overhead hook line (`B.hallLine`, InstancedMesh, runs until the
+  kill switches). Own surfaces: `plant98` theme (dark steel cladding, sealed concrete, roof deck). Cool white lamps,
+  grey haze, hemisphere fill (`officeLight` when `D.hall`). Perf: baked in 32 m blocks, no carcasses on hall rails,
+  no shadows from clutter/catwalks/line: ~370 draws at the lift (B7/B9 ~300). ~10 lockers only.
+  Chain (`chain`, puzzles.js): fuses → keypad → scale → kill switches (one in the wing) → valves → hooks (brake crank)
+  → `Override` (line control desk, furthest room) unlocks the lift; frenzy after it (4 s head start). Locked jobs say
+  "LOCKED — FIRST: …"; notes/wall writing readable any time. Saves from an older B10 (`b10` < 4) restart B10.
+- Windows splash (`offalr-desktop/splash.bmp`) = make-art.mjs `splash_640x299`: the banner only (no text, no subtitle).
 - Textures vanishing: every 2D canvas forced CPU-backed in `three-r.js` (GPU canvases got blanked → black
   normal/AO maps → dark walls); env map rebuilt on WebGL context restore.
 - Intro freeze: card shows before the build; death film a frame later; textures uploaded few-per-frame
