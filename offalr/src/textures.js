@@ -776,6 +776,75 @@ function factoryCeilCanvas() {
   return c;
 }
 
+// ---- B10, the main factory floor: the newest part of the plant (1994 on the plaque). Pale steel cladding on a
+// concrete plinth, a safety-red kick band, sealed concrete floors with red-and-white lanes, a galvanised roof deck ----
+const ribs = (g, x0, w, y0, h, base, rib = 16) => { // standing-seam cladding: a light face, a shadowed rib
+  for (let x = x0; x < x0 + w; x += rib) {
+    const gr = g.createLinearGradient(x, 0, x + rib, 0);
+    gr.addColorStop(0, `rgb(${base.map((v) => v - 26)})`); gr.addColorStop(0.18, `rgb(${base.map((v) => v + 14)})`);
+    gr.addColorStop(0.55, `rgb(${base})`); gr.addColorStop(0.85, `rgb(${base.map((v) => v - 8)})`); gr.addColorStop(1, `rgb(${base.map((v) => v - 34)})`);
+    g.fillStyle = gr; g.fillRect(x, y0, rib, h);
+  }
+};
+function plant98WallCanvas(gore) {
+  const W = 256, H = 384, { c, g } = hq(W, H), rng = makeRng(1994 + gore * 13);
+  const plinth = H - 154; // the bottom 1.2 m is poured concrete
+  ribs(g, 0, W, 0, plinth, [196, 200, 200]);
+  g.fillStyle = 'rgba(60,64,66,.5)'; g.fillRect(0, plinth - 6, W, 6); // the flashing over the plinth
+  g.fillStyle = '#d8dcdc'; g.fillRect(0, plinth - 10, W, 4);
+  for (let x = 6; x < W; x += 32) { g.fillStyle = '#7a8084'; g.fillRect(x, 20, 3, 3); g.fillRect(x, plinth - 30, 3, 3); } // fixings
+  streaks(g, W, plinth, 10, '90,84,76', 0.18, rng, true); // a little weather off the fixings: it's newer, not new
+  g.fillStyle = '#9c9e9a'; g.fillRect(0, plinth, W, H - plinth);
+  blotches(g, W, H, 60, 3, 18, '120,122,118', 0.3, rng);
+  for (const x of [64, 192]) { g.fillStyle = '#5c5e5a'; g.beginPath(); g.arc(x, plinth + 60, 4, 0, 7); g.fill(); } // form-tie holes
+  g.fillStyle = 'rgba(70,72,68,.6)'; g.fillRect(0, plinth + 1, W, 2);
+  g.fillStyle = '#9a1612'; g.fillRect(0, H - 34, W, 34); // safety-red kick band
+  g.fillStyle = '#e8e4dc'; g.fillRect(0, H - 40, W, 6);
+  for (let i = 0; i < 22; i++) { g.fillStyle = `rgba(30,28,26,${rng() * 0.45})`; g.fillRect(rng() * W, H - 44 + rng() * 40, 8 + rng() * 40, 2); } // trolley scuffs
+  wallBlood(g, W, H, gore, rng);
+  speckle(g, W, H, 8, rng);
+  return c;
+}
+function plant98UpperCanvas() { // the cladding all the way up to the roof
+  const W = 256, H = 384, { c, g } = hq(W, H), rng = makeRng(1995);
+  ribs(g, 0, W, 0, H, [184, 188, 190]);
+  g.fillStyle = 'rgba(50,54,56,.55)'; g.fillRect(0, H - 4, W, 4); // the panel lap
+  for (let x = 6; x < W; x += 32) { g.fillStyle = '#7a8084'; g.fillRect(x, 10, 3, 3); g.fillRect(x, H - 14, 3, 3); }
+  streaks(g, W, H, 12, '80,74,66', 0.16, rng, true);
+  blotches(g, W, H, 30, 6, 30, '120,124,126', 0.2, rng);
+  speckle(g, W, H, 6, rng);
+  return c;
+}
+function plant98FloorCanvas(kind) { // sealed concrete: pale, a soft gloss, trowel swirls, tyre marks
+  const S = 256, { c, g } = hq(S, S), rng = makeRng(1996 + kind * 7);
+  g.fillStyle = '#8e908c'; g.fillRect(0, 0, S, S);
+  blotches(g, S, S, 120, 8, 46, '120,122,118', 0.22, rng);
+  blotches(g, S, S, 90, 6, 40, '96,98,94', 0.2, rng);
+  for (let i = 0; i < 40; i++) { g.strokeStyle = `rgba(160,162,158,${rng() * 0.12})`; g.lineWidth = 2 + rng() * 4; g.beginPath(); g.arc(rng() * S, rng() * S, 20 + rng() * 50, rng() * 6, rng() * 6 + 1.5); g.stroke(); } // trowel
+  for (let i = 0; i < 4; i++) { g.strokeStyle = `rgba(40,40,38,${0.08 + rng() * 0.1})`; g.lineWidth = 7; g.beginPath(); const y = rng() * S; g.moveTo(0, y); g.bezierCurveTo(S * 0.3, y + (rng() - 0.5) * 60, S * 0.7, y + (rng() - 0.5) * 60, S, y + (rng() - 0.5) * 30); g.stroke(); } // forklift tyres
+  g.fillStyle = 'rgba(60,62,58,.5)'; g.fillRect(0, 0, S, 2); // a saw-cut joint on one edge (a 2 m grid, the way they cut slabs)
+  if (kind === 2) {
+    g.fillStyle = '#6a6e70'; g.fillRect(S / 2 - 42, S / 2 - 42, 84, 84);
+    g.fillStyle = '#1a1c1c'; for (let y = S / 2 - 36; y < S / 2 + 36; y += 7) g.fillRect(S / 2 - 36, y, 72, 3);
+    bloodPool(g, S / 2, S / 2, 56, makeRng(78));
+  }
+  if (kind === 1) bloodPool(g, S / 2, S / 2, 46, makeRng(9));
+  if (kind === 3) { g.fillStyle = 'rgba(20,20,18,.18)'; for (let i = 0; i < 6; i++) g.fillRect(rng() * S, 0, 3, S); } // the drag of pallets
+  speckle(g, S, S, 7, rng);
+  return c;
+}
+function plant98CeilCanvas() { // a galvanised trapezoidal deck, seen from below
+  const S = 256, { c, g } = hq(S, S), rng = makeRng(1997);
+  for (let x = 0; x < S; x += 32) {
+    const gr = g.createLinearGradient(x, 0, x + 32, 0);
+    gr.addColorStop(0, '#6e7476'); gr.addColorStop(0.25, '#9ea4a6'); gr.addColorStop(0.5, '#868c8e'); gr.addColorStop(0.75, '#5a6062'); gr.addColorStop(1, '#6e7476');
+    g.fillStyle = gr; g.fillRect(x, 0, 32, S);
+  }
+  blotches(g, S, S, 50, 6, 30, '60,58,52', 0.25, rng);
+  speckle(g, S, S, 8, rng);
+  return c;
+}
+
 function freezeCeilCanvas() {
   const S = 256, { c, g } = hq(S, S), rng = makeRng(877);
   for (let x = 0; x < S; x += 16) { const gr = g.createLinearGradient(x, 0, x + 16, 0); gr.addColorStop(0, '#5c646a'); gr.addColorStop(0.5, '#8a949a'); gr.addColorStop(1, '#4a5258'); g.fillStyle = gr; g.fillRect(x, 0, 16, S); } // corrugated
@@ -799,6 +868,8 @@ export function themeMaterials(mats, theme) {
   else if (theme === 'hiring') m = { walls: wall(hiringWallCanvas, 30, 0x222a22, 1.0), floors: floor(hiringFloorCanvas, 90, 0x333028), ceil: phong({ map: tx(dropCeiling(977, [150, 156, 140], '#2e3430')), shininess: 4 }, CEIL_P) };
   else if (theme === 'sewer') m = { walls: wall(sewerWallCanvas, 70, 0x334422, 2), floors: floor(sewerFloorCanvas, 110, 0x445533), ceil: phong({ map: tx(sewerCeilCanvas()), shininess: 30, specular: 0x222222 }, CEIL_P) };
   else if (theme === 'processing') m = { walls: wall(factoryWallCanvas, 30, 0x2a2a22, 1.4), floors: floor(factoryFloorCanvas, 90, 0x4a2a22), ceil: phong({ map: tx(factoryCeilCanvas()), shininess: 30, specular: 0x222222 }, CEIL_P) };
+  else if (theme === 'plant98') m = { walls: wall(plant98WallCanvas, 55, 0x777b7d, 0.7), upper: phong({ map: tx(plant98UpperCanvas()), bumpMap: tx(plant98UpperCanvas()), bumpScale: 0.6, shininess: 60, specular: 0x8a8e90 }, { ...WALL_P, metal: 0.55, roughClean: 0.4 }),
+    floors: floor(plant98FloorCanvas, 70, 0x5a5c5a), ceil: phong({ map: tx(plant98CeilCanvas()), shininess: 50, specular: 0x666a6c }, { ...CEIL_P, metal: 0.6 }) };
   else if (theme === 'freezer') m = { walls: wall(freezeWallCanvas, 50, 0x8899aa, 0.6), floors: floor(freezeFloorCanvas, 60, 0x99aabb), ceil: phong({ map: tx(freezeCeilCanvas()), shininess: 40, specular: 0x666666 }, CEIL_P) };
   else m = null;
   mats.themes[theme] = m;

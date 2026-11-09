@@ -104,7 +104,8 @@ export function bakeLocal(root) {
   return n;
 }
 
-export function bakeStatic(group, roots, wholes = []) {
+// cell: the block size welded together (the open hall on B10 shows most of itself at once: bigger blocks, fewer draws)
+export function bakeStatic(group, roots, wholes = [], cell = CELL) {
   let local = 0;
   for (const w of wholes) local += bakeLocal(w);
   group.updateMatrixWorld(true);
@@ -113,7 +114,7 @@ export function bakeStatic(group, roots, wholes = []) {
   group.traverse((o) => {
     if (live.has(o) || !visibleChain(o, group)) return;
     const e = o.matrixWorld.elements;
-    const k = bucketKey(o, `${Math.floor(e[12] / CELL)},${Math.floor(e[14] / CELL)}`);
+    const k = bucketKey(o, `${Math.floor(e[12] / cell)},${Math.floor(e[14] / cell)}`);
     if (k) addTo(buckets, o, k);
   });
   let removed = 0, made = 0;

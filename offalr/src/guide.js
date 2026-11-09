@@ -23,7 +23,8 @@ const BRIEF = {
   meatkey: 'The deep freeze. The lift cage is padlocked, and the key was hung up with the meat.\n\nCut open the wrapped carcasses (hold E) until you find it. It is cold enough down here that you get your breath back slower.',
   override: 'The line has stopped and the brake is off. One thing left: the master override in line control, at the far end of the floor.\n\nHold E on the lever. Everything will go off at once, and both of them will know where you are. Then run for the lift.',
   breakers: 'The power is on and the line is running again.\n\nPull the three kill switches to stop it. One of them is in the wing behind the shutter. The first one sets off the alarm, and they will hear every one.',
-  bottom: 'This is the bottom. The lift here goes UP, and nothing on this floor works.\n\nPower, then the shutter, then the line, then the brake, then the override: each job needs the one before it. TAB lists them. Notes and writing on the walls can be read any time.',
+  hooks: 'The lift’s chain brake is wound on, and the crank that winds it off is gone.\n\nIt went up the line, pushed inside one of the bodies on the hooks. Search them (hold E). Then wind the brake off at the lift.',
+  bottom: 'This is the bottom. The lift here goes UP, and nothing on this floor works.\n\nSeven jobs: power, the shutter, the counterweight, the line, the steam, the brake crank, the override. Each one needs the one before it. TAB lists them. Notes and writing on the walls can be read any time.',
 };
 
 // a puzzle's title cut down to its first clause and its count: 'LOAD THE SCALE — AT LEAST <b>32 KG</b>' -> 'LOAD THE SCALE <b>32 KG</b>'

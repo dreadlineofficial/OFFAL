@@ -367,7 +367,9 @@ function loadFloor(depth, seed) {
   scene.fog.density = 0.085 + D.fogBoost + Math.min(depth, 10) * 0.003;
   // the hiring office is just an office: lit, clean, nothing wrong with it yet. The torch can stay off.
   G.officeLight ||= scene.add(new THREE.HemisphereLight(0xfff2dc, 0x5a5044, 0)) && scene.children[scene.children.length - 1];
-  G.officeLight.intensity = D.intro ? 3.2 : 0;
+  G.officeLight.intensity = D.intro ? 3.2 : D.hall ? 2.2 : 0;
+  // (the factory floor: a faint fill, so the size of the place reads past the torch)
+  G.officeLight.color.setHex(D.hall ? 0xb8c2cc : 0xfff2dc); G.officeLight.groundColor.setHex(D.hall ? 0x2a2a28 : 0x5a5044);
   if (D.intro) { scene.fog.density = 0.022; player.lightOn = false; }
   // playing the Foreman: you see what he sees, in red, a good way off
   if (G.mode === 'hunt') scene.fog.density = 0.035;
@@ -397,7 +399,7 @@ function loadFloor(depth, seed) {
     fuseBodies(B.group); // every dead body on the floor in one piece (sculpt.js)
     upgradeTree(B.group); // finer primitives before the static parts are welded
   }
-  if (!window.__noBake) G.bake = bakeStatic(B.group, [B, G.puzzles, G.hunters, director], B.swingers);
+  if (!window.__noBake) G.bake = bakeStatic(B.group, [B, G.puzzles, G.hunters, director], B.swingers, L.hall ? 32 : undefined);
   // the locker scare's body, fused now so opening the locker can't stall. Last, and only on floors with corpses: by then
   // every cache it touches is already filled exactly as in the original, so nothing the game rolls later can shift
   if (REMASTER && B.corpses.length) prewarmLockerBody();
@@ -511,7 +513,7 @@ function startRun(mode = 'story', fresh = false, diff = null, opts = {}) {
   writeSave();
   let snap = opts.resume || null;
   // B10 was rebuilt (a bigger floor, a chain of jobs): a save from the old one starts the new one from the lift
-  if (snap && snap.mode === 'story' && snap.depth === STORY_FLOORS && snap.b10 !== 2) snap = null;
+  if (snap && snap.mode === 'story' && snap.depth === STORY_FLOORS && snap.b10 !== 3) snap = null;
   if (snap) { G.diff = snap.diff; G.runTime = snap.runTime; G.runTags = snap.runTags; }
   else save.snap = null;
   G.trans = { t: 0.8, loaded: false, next: snap ? snap.depth : mode === 'story' ? st.floor : opts.floor || 1, snap };
@@ -944,7 +946,7 @@ function snapshot() {
   if (!G.B || G.mode === 'hunt' || !['play', 'paused'].includes(G.state) || ['closing', 'sealed'].includes(G.lift.phase)) return null;
   const B = G.B;
   return {
-    v: 1, b10: 2, mode: G.mode, diff: G.diff, depth: G.depth, seed: G.floorSeed, at: Date.now(),
+    v: 1, b10: 3, mode: G.mode, diff: G.diff, depth: G.depth, seed: G.floorSeed, at: Date.now(),
     runTime: G.runTime, runTags: G.runTags, floorTime: G.floorTime,
     p: { x: player.pos.x, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, tags: player.tags, battery: player.battery, stamina: player.stamina,
       adrenaline: player.adrenaline, light: player.lightOn, crouch: player.crouch, locker: player.hidden ? B.lockers.indexOf(player.hidden) : -1 },
@@ -1564,6 +1566,7 @@ function updateGame(dt, t) {
   director.update(dt);
   updateLamps(t);
   updateSwingers(dt, t);
+  if (G.B.hallLine) { const br = G.puzzles && G.puzzles.get('breakers'); G.B.hallLine.update(dt, !(br && br.solved)); } // B10's overhead line runs until it's stopped
   updateLockers(dt);
   for (const c of B.corpses) if (!c.harvested && c.pos.distanceToSquared(player.pos) < 200) animateFlies(c.flies, t);
 

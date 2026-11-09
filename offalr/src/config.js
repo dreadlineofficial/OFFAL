@@ -41,10 +41,12 @@ const STORY = [
     size: 52, rooms: 16, tags: 6, hunters: 2, puzzles: ['meatkey'] },
   { name: 'THE QUIET LINE', quote: 'Everything the line made ends up in the smokehouse. The fires never went out.', lamp: 0xffa860, fog: 0x0a0503,
     size: 54, rooms: 17, tags: 6, hunters: 2, puzzles: ['hooks'], deadLamps: 0.5, pool: ['smoke', 'vats', 'line', 'bunks', 'shrine', 'hanging', 'smoke', 'vats', 'lockers', 'pit', 'smoke', 'bunks'], glass: 0.14 }, // the smokehouse: smoke chambers, rendering vats, bunks, a shrine; glass underfoot
-  { name: 'THE LINE', quote: 'This is where it all goes. Stop the line, and the shift is over.', lamp: 0xff4030, fog: 0x080000,
-    // the bottom: a big floor of halls, and one job after another (each needs the last) before the lift will go up
-    size: 62, rooms: 20, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'breakers', 'valves', 'override'], finale: true, chain: true, big: true,
-    pool: ['line', 'line', 'hanging', 'pens', 'cold', 'butcher', 'pit', 'lockers', 'vats', 'hanging', 'line', 'cold', 'pens', 'butcher', 'lockers', 'pit', 'shrine', 'cold', 'line', 'hanging'] },
+  { name: 'THE LINE', quote: 'This is where it all goes. Stop the line, and the shift is over.', lamp: 0xe2eaf2, fog: 0x2a2e31, // (the newest part of the plant: cold white light, and a haze the far side stands out of)
+   
+    // the bottom: the main factory floor, one open hall under a roof 12 m up, and one job after another (each needs
+    // the last) before the lift will go up
+    size: 48, rooms: 14, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'scale', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, ceil: 12, fogBoost: -0.045,
+    pool: ['line', 'vats', 'pens', 'butcher', 'hanging', 'pit', 'line', 'vats', 'lockers', 'butcher', 'pens', 'pit', 'vats', 'line'] }, // (one hall of hanging meat: the overhead line carries the rest)
 ];
 
 const DEEP = ['THE COLD ROOM', 'OFFAL PIT', 'BONE YARD', 'THE QUIET LINE', 'HIS OFFICE', 'FURTHER DOWN', 'WHERE THE DRAINS GO'];
@@ -107,7 +109,7 @@ export function difficulty(depth, mode = 'story', rng = Math.random, diffKey = '
   if (depth === 0) return { ...base, ...pace, batteries: 0, size: 14, rooms: 4, tags: 0, hunters: 0, puzzles: ['notice'], adrenaline: 0, gore: 0, screamers: 0, deadLamps: 0.1, theme: 'offices', intro: true };
   if (mode === 'story') {
     const f = STORY[Math.min(depth, STORY_FLOORS) - 1];
-    return { ...base, ...pace, batteries: batteriesFor(f.size, diffKey), size: f.size, rooms: f.rooms, tags: f.tags, hunters: f.hunters, puzzles: f.puzzles.slice(), finale: !!f.finale, chain: !!f.chain, big: !!f.big,
+    return { ...base, ...pace, batteries: batteriesFor(f.size, diffKey), size: f.size, rooms: f.rooms, tags: f.tags, hunters: f.hunters, puzzles: f.puzzles.slice(), finale: !!f.finale, chain: !!f.chain, hall: !!f.hall, ceil: f.ceil || 0,
       fogBoost: (f.fogBoost || 0) + ((THEMES[f.theme || 'plant'] || {}).fogBoost || 0), deadLamps: f.deadLamps ?? base.deadLamps, theme: f.theme || 'plant', pool: f.pool, glass: f.glass || 0 };
   }
   // overtime: endless, and the puzzles are a lottery

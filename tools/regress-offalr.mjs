@@ -53,7 +53,7 @@ await check('B10: jobs unlock one after another', new Function(`const enter = ${
   const order = pz.list.map((x) => x.kind).join(','), br = pz.get('breakers');
   const early = pz.interactables().filter((i) => br.switches.some((s) => s.pos === i.pos) && i.use).length;
   const seq = []; for (const p of pz.list) { seq.push(pz.step === p); p.solve(); }
-  return { ok: order === 'fuses,keypad,breakers,valves,override' && early === 0 && seq.every(Boolean) && pz.ready && !!o.G.L.wing, info: order };`));
+  return { ok: order === 'fuses,keypad,scale,breakers,valves,hooks,override' && early === 0 && seq.every(Boolean) && pz.ready && !!o.G.L.wing, info: order };`));
 await check('floor card ends on its own (real timers)', () => new Promise((res) => { const o = window.__offal; o.G.state = 'menu'; o.startRun('story', true, 'normal', { floor: 2 }); const t0 = performance.now();
   const iv = setInterval(() => { if (o.G.state !== 'transition' || performance.now() - t0 > 150000) { clearInterval(iv); res({ ok: o.G.state === 'play', info: Math.round((performance.now() - t0) / 1000) + 's' }); } }, 200); }));
 await check('story ending plays through', new Function(`const enter = ${enter}; enter('story', 10); const o = window.__offal; o.G.dev = null; o.startEnding();

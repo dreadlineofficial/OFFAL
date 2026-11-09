@@ -539,7 +539,7 @@ class Valves {
       if (this.solved) {
         G.audio.powerOn(v.pos);
         G.noise(v.pos, 22, true);
-        UI.message('Pressure’s down. The lift brake is off.', 4);
+        UI.message(this.ctx.chain ? 'Pressure’s down. The chain brake is still wound on, and its crank is gone.' : 'Pressure’s down. The lift brake is off.', 4);
       } else UI.message('That one’s off.', 2);
       return;
     }
@@ -1080,7 +1080,7 @@ class Hooks {
     const G = this.ctx.G;
     this.done = true; this.carry = false;
     G.audio.clank(this.brake, 1); G.audio.chainRattle?.(this.brake);
-    UI.message('The brake comes off with a bang that runs up the shaft. The lift is free.', 4.5);
+    UI.message(this.ctx.chain ? 'The brake comes off with a bang that runs up the shaft. One thing left: the master override.' : 'The brake comes off with a bang that runs up the shaft. The lift is free.', 4.5);
   }
   goals() { return this.done ? [] : this.carry ? [this.brake] : this.bodies.filter((b) => !b.searched).map((b) => b.pos); }
   line() { return this.done ? null : this.carry ? 'CRANK ✓ — THE BRAKE' : `BODIES ${this.bodies.filter((b) => b.searched).length}/${this.bodies.length}`; }

@@ -16,6 +16,7 @@ export function dressArchitecture(L, mats, group, theme = 'plant') {
 
 function dress(L, mats, group, theme) {
   const rng = makeRng(L.seed * 31 + 7);
+  const CH = L.ceil || WALL_H; // (the factory floor's roof is higher: its pipes run up there)
   const { W, H, grid } = L;
   const crawl = L.crawl || new Uint8Array(W * H);
   const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !!grid[y * W + x] && !crawl[y * W + x];
@@ -59,12 +60,12 @@ function dress(L, mats, group, theme) {
       if (runOf(i, k + 8, corridor ? 0.6 : 0.45)) {
         const two = runOf(i, k + 16, 0.5);
         for (let p = 0; p < (two ? 2 : 1); p++) {
-          const r = p ? 0.032 : 0.05, off = p ? 0.24 : 0.12, h = WALL_H - (p ? 0.36 : 0.2);
+          const r = p ? 0.032 : 0.05, off = p ? 0.24 : 0.12, h = CH - (p ? 0.36 : 0.2);
           put(along(TILE, r, pipeMat), fx + nx * off, h, fz + nz * off, yaw);
           put(along(0.035, r * 1.45, pipeMat, 16), fx + nx * off - ax * TILE / 2, h, fz + nz * off - az * TILE / 2, yaw);
           if (rng() < 0.35) put(along(0.03, r * 1.3, mats.chain, 12), fx + nx * off + ax * 0.2, h, fz + nz * off + az * 0.2, yaw); // a band clamp
         }
-        put(P.mesh(P.box(0.04, 0.04, two ? 0.28 : 0.15), pipeMat, false), fx + nx * (two ? 0.14 : 0.075), WALL_H - 0.14, fz + nz * (two ? 0.14 : 0.075), yaw);
+        put(P.mesh(P.box(0.04, 0.04, two ? 0.28 : 0.15), pipeMat, false), fx + nx * (two ? 0.14 : 0.075), CH - 0.14, fz + nz * (two ? 0.14 : 0.075), yaw);
       }
     }
     // steel frames where a corridor opens into a room
@@ -82,7 +83,7 @@ function dress(L, mats, group, theme) {
     }
   }
   // I-beams across every room: a web and two flanges, on the tile lines so they never meet a lamp (lamps hang mid-tile)
-  if (!offices) for (const r of L.rooms) {
+  if (!offices && !L.hall) for (const r of L.rooms) { // (the factory floor has its own roof trusses: hall.js)
     const alongX = r.w <= r.h; // span the short way
     const n = alongX ? r.h : r.w, span = (alongX ? r.w : r.h) * TILE;
     for (let s = 2; s < n; s += 2) {
