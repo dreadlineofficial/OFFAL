@@ -2,6 +2,10 @@
 export const TILE = 2; // metres per map cell
 export const WALL_H = 3;
 export const STORY_FLOORS = 10;
+// the free demo (GameJolt): the hiring office and B1-B3, then a card. Built by `node tools/build-offalr.mjs --demo`
+// (it sets OFFAL_DEMO before the game loads); `?demo=1` on the dev server plays it too
+export const DEMO = (() => { try { return !!globalThis.OFFAL_DEMO || new globalThis.URLSearchParams(globalThis.location.search).has('demo'); } catch { return false; } })();
+export const DEMO_LAST = 3;
 export const RUN_SPEED = 5.1; // the player's sprint, m/s; the Foreman's chase is set against it
 
 // how fast he is next to you, and what makes noise

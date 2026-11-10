@@ -32,7 +32,8 @@ export const REMASTERED = (() => {
   try {
     const q = new URLSearchParams(window.location.search).get('look');
     if (q === 'classic' || q === 'remastered') return q !== 'classic';
-    const s = JSON.parse(localStorage.getItem('offalr-save-v1') || localStorage.getItem('offal-save-v1'));
+    const demo = !!globalThis.OFFAL_DEMO || new URLSearchParams(window.location.search).has('demo');
+    const s = JSON.parse(demo ? localStorage.getItem('offalr-demo-save-v1') : localStorage.getItem('offalr-save-v1') || localStorage.getItem('offal-save-v1'));
     return !(s && s.settings && s.settings.look === 'classic');
   } catch { return true; }
 })();

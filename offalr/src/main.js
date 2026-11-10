@@ -25,7 +25,7 @@ import { Guide } from './guide.js';
 import { Cutscene, CUTSCENES, compileSoon } from './cutscenes.js';
 import * as UI from './ui.js';
 import * as P from './props.js';
-import { floorInfo, difficulty, WALL_H, STORY_FLOORS, DIFFS, THEMES } from './config.js';
+import { floorInfo, difficulty, WALL_H, STORY_FLOORS, DIFFS, THEMES, DEMO, DEMO_LAST } from './config.js';
 import { animateFlies } from './props.js';
 import { Gun, AMMO_MAX, freshInv, cloneInv } from './gun.js';
 import { KEEPSAKES, KEEPSAKE_DRAW, keepsakeFor, CUTSCENE_INFO } from './collection.js';
@@ -37,13 +37,13 @@ import { bakeStatic } from './bake.js';
 import { BEATS, ENDING } from './story.js';
 
 // ---------- save ----------
-const SAVE_KEY = 'offalr-save-v1'; // the remaster's own save; the first time, it picks up the original's (offal-save-v1)
+const SAVE_KEY = DEMO ? 'offalr-demo-save-v1' : 'offalr-save-v1'; // the remaster's own save; the first time, it picks up the original's (offal-save-v1)
 const save = (() => {
   const fresh = { v: 1, runs: [], best: 0, deaths: 0, totalTags: 0, shifts: 0,
     story: { active: false, floor: 1, seed: 0, deaths: 0, time: 0, tags: 0, done: 0, bestTime: 0, inv: null }, collection: { keep: [], cuts: [] }, settings: { look: 'remastered', dynRes: true, gfx: 'auto', res: 'preset', grain: 1, ca: true, eyeAdapt: true, dev: false, devPresolve: true, sens: 1, vol: 0.8, gamma: 1, pix: 300, draw: 1, fps: 0, tsens: 1, uiMenu: 100, uiGame: 100, shake: true, fov: 75, invert: false, bob: true, beam: 0.55, power: 160, hints: true, fullscreen: true, grade: 0, blood: 1, contrast: 1, vignette: 1, filter: 0, filterAmt: 1, dust: 1 } };
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
   try {
-    const s = read(SAVE_KEY) || read(SAVE_KEY + '.bak') || read('offal-save-v1'); // (a broken save falls back to the copy before it)
+    const s = read(SAVE_KEY) || read(SAVE_KEY + '.bak') || (DEMO ? null : read('offal-save-v1')); // (a broken save falls back to the copy before it)
     if (s && s.v === 1) return { ...fresh, ...s, story: { ...fresh.story, ...s.story }, collection: { ...fresh.collection, ...s.collection }, settings: { ...fresh.settings, ...s.settings } };
   } catch {}
   return fresh;
@@ -52,6 +52,7 @@ const writeSave = () => {
   try { const old = localStorage.getItem(SAVE_KEY); if (old) localStorage.setItem(SAVE_KEY + '.bak', old); localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {}
 };
 const VERSION = '1.0.0';
+if (DEMO) save.settings.dev = false; // the demo has no dev mode
 
 // ---------- renderer ----------
 const canvas = UI.$('view');
@@ -626,6 +627,7 @@ function updateTransition(dt) {
 }
 
 function nextFloor() {
+  if (DEMO && G.mode === 'story' && G.depth >= DEMO_LAST) { if (G.depth === 3) ach('b3'); return demoEnd(); }
   // what getting off this floor earns
   if (G.mode === 'story') { if (G.depth === 0) ach('hired'); for (const d of [2, 3, 5, 8]) if (G.depth === d) ach('b' + d); }
   if (G.depth > 0 && G.hunters.length && !G.chased) ach('unseen');
@@ -883,6 +885,35 @@ function startEnding() {
   }, 1500);
   UI.$('fade').classList.add('on');
 }
+// the demo: the lift leaves B3 and doesn't stop. A card instead of the next floor
+const DEMO_END = [
+  'The lift doesn\u2019t stop at B4.',
+  'It keeps going down. Below you, something is dragging a hook along the shaft.',
+  'Seven more floors.',
+];
+function demoEnd() {
+  try { document.exitPointerLock(); } catch {}
+  const st = save.story;
+  G.endInfo = { time: Math.round(G.runTime), deaths: st.deaths, tags: G.runTags };
+  st.done = (st.done || 0) + 1;
+  st.active = false;
+  save.snap = null;
+  writeSave();
+  UI.prompt(null);
+  audio.siren(false);
+  audio.lineRunning(false);
+  G.state = 'endcine';
+  UI.$('fade').classList.add('on');
+  setTimeout(() => {
+    if (G.state !== 'endcine' || G.cutscene) return;
+    disposeLevel();
+    G.B = null;
+    audio.liftMotor(false);
+    audio.setMode('ending');
+    UI.$('fade').classList.remove('on');
+    endingText(DEMO_END, true);
+  }, 2200);
+}
 function updateEndCine(dt) {
   const cs = G.cutscene;
   if (!cs) return;
@@ -903,11 +934,11 @@ function updateEndCine(dt) {
   }
 }
 // after the film: the card, white, with the last lines and what it cost
-function endingText() {
+function endingText(lines = ENDING, demo = false) {
   G.state = 'ending';
   const { time, deaths, tags } = G.endInfo;
   const fmt = (s) => `${(s / 3600) | 0}h ${String(((s / 60) | 0) % 60).padStart(2, '0')}m`;
-  const lines = ENDING;
+  UI.$('endStamp').textContent = demo ? 'END OF DEMO' : 'SHIFT COMPLETE';
   UI.$('endStamp').classList.remove('on');
   UI.$('endStats').classList.remove('on');
   UI.$('endNav').classList.remove('on');
@@ -924,7 +955,7 @@ function endingText() {
   setTimeout(() => { if (G.state === 'ending') { UI.$('endStamp').classList.add('on'); audio.clank({ x: 0, z: 0 }, 1); } }, tEnd);
   setTimeout(() => {
     if (G.state !== 'ending') return;
-    UI.$('endStats').innerHTML = `<span>TIME ON SHIFT</span><b>${fmt(time)}</b><span>TIMES PROCESSED</span><b>${deaths}</b><span>TAGS CUT</span><b>${tags}</b><span>KEEPSAKES</span><b>${save.collection.keep.length}/${KEEPSAKES.length}</b><span>NEXT SHIFT</span><b class="rec">TONIGHT, 22:00</b>`;
+    UI.$('endStats').innerHTML = `<span>TIME ON SHIFT</span><b>${fmt(time)}</b><span>TIMES PROCESSED</span><b>${deaths}</b><span>TAGS CUT</span><b>${tags}</b><span>KEEPSAKES</span><b>${save.collection.keep.length}/${KEEPSAKES.length}</b>${demo ? '<span>THE REST OF THE SHIFT</span><b class="rec">B4 \u2013 B10 \u00B7 FULL GAME ON STEAM</b>' : '<span>NEXT SHIFT</span><b class="rec">TONIGHT, 22:00</b>'}`;
     UI.$('endStats').classList.add('on');
     UI.$('endNav').classList.add('on');
   }, tEnd + 2500);
@@ -935,8 +966,8 @@ function refreshMenu() {
   UI.$('btnStory').textContent = st.active ? `Continue \u2014 ${floorInfo(st.floor).label} \u00B7 ${floorInfo(st.floor).name} (${(DIFFS[st.diff] || DIFFS.normal).label.toLowerCase()})` : st.done ? 'Clock in again' : 'Clock in';
   UI.$('btnNew').hidden = !st.active;
   const ot = save.snap && save.snap.mode === 'overtime' ? save.snap : null;
-  UI.$('btnOvertimeContinue').hidden = !ot;
-  if (ot) UI.$('btnOvertimeContinue').textContent = `Continue overtime \u2014 B${ot.depth}`;
+  if (!DEMO) UI.$('btnOvertimeContinue').hidden = !ot;
+  if (ot && !DEMO) UI.$('btnOvertimeContinue').textContent = `Continue overtime \u2014 B${ot.depth}`;
   UI.timecard(save);
 }
 
@@ -1702,7 +1733,7 @@ function resume() {
 let settingsFrom = 'menu';
 let diffIntent = { mode: 'story', fresh: true };
 function drawFloorPick() {
-  const floors = [0, ...Array.from({ length: STORY_FLOORS }, (_, i) => i + 1)];
+  const floors = [0, ...Array.from({ length: DEMO ? DEMO_LAST : STORY_FLOORS }, (_, i) => i + 1)];
   UI.$('floorPickBtns').innerHTML = floors.map((f) => { const i = floorInfo(f); return `<button data-act="floorpick" data-floor="${f}" class="${f === diffIntent.floor ? 'sel' : ''}">${f ? i.label : 'START'}<small>${f ? i.name : 'THE HIRING OFFICE'}</small></button>`; }).join('');
 }
 function pickDifficulty(mode, fresh) {
@@ -2196,7 +2227,13 @@ function caption(text, pos) {
 }
 for (const k in CAPTION) { const f = audio[k]; if (typeof f === 'function') audio[k] = function (...a) { caption(CAPTION[k], a[0]); return f.apply(this, a); }; }
 G.caption = caption;
-UI.$('version').textContent = 'v' + VERSION;
+UI.$('version').textContent = 'v' + VERSION + (DEMO ? ' demo' : '');
+if (DEMO) {
+  // the demo: story only, from the hiring office to B3; no endless mode, no dev mode
+  for (const b of document.querySelectorAll('[data-act="overtime"], #btnOvertimeContinue')) b.remove();
+  for (const id of ['devMode', 'devMode2']) { const l = UI.$(id).closest('label'); if (l) l.hidden = true; }
+  document.querySelector('#menu .sub').textContent = 'HOLLOW PINES MEATWORKS \u00B7 NIGHT SHIFT \u00B7 DEMO';
+}
 // controllers: the sticks walk and look, the buttons press the keys (see gamepad.js); prompts name the buttons
 initGamepad({
   look: (dx, dy) => player.look(dx * (save.settings.padSens ?? 1), dy * (save.settings.padSens ?? 1)),

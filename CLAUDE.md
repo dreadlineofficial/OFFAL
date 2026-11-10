@@ -79,6 +79,11 @@ node tools/regress-offalr.mjs             # regression, needs the dev server; mu
 
 ## Current state (Nov 2026, v1.0.0)
 Done recently:
+- GameJolt demo: `node tools/build-offalr.mjs --demo` → `dist/offalr-demo.html` (sets `OFFAL_DEMO`; `?demo=1` on the
+  dev server). config.js `DEMO`/`DEMO_LAST = 3`: hiring office + B1–B3, then `demoEnd` (main.js) shows the ending card
+  with "END OF DEMO"; no Overtime, no dev mode, floor pick only up to B3, own save key `offalr-demo-save-v1`.
+  GameJolt HTML5 = zip with that file as `index.html`. Windows demo exe: copy it to `offalr-desktop/game/offal.html`,
+  then electron-builder with `-c.productName="OFFAL Demo" -c.appId=games.offal.demo`. No demo APK (same package id).
 - B10 = the main factory floor (`hall: true`, `ceil: 12`, size 56). `hallRooms` (level.js): one open hall of work
   areas with no walls, 2-tile aisles with column lines, a lift bay, a walled 2-room annex (= the keypad wing), and
   strips of small rooms along the north/west walls (`fixed` types; `L.low` tiles keep a 3 m ceiling, walls above their
