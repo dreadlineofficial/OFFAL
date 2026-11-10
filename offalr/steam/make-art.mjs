@@ -91,7 +91,7 @@ html,body{margin:0;background:transparent}
 .r{position:absolute;font-family:'Liberation Serif','Times New Roman',serif;letter-spacing:.85em;color:#d8cdb8;opacity:.9;white-space:nowrap}
 .shade{position:absolute;inset:0;background:${title?.shade || 'none'}}
 </style></head><body><svg width="0" height="0" style="position:absolute"><filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="${0.04 * 210 / (title?.size ?? 210)}" numOctaves="3" seed="7"/><feDisplacementMap in="SourceGraphic" scale="${10 * (title?.size ?? 210) / 210}"/></filter></svg>
-<div class="a" id="a">${title ? `<div class="shade"></div><div class="t" id="t">OFFAL</div>${title.noSub ? '' : `<div class="r" style="left:${title.x + title.size * 0.08}px;top:${title.y + title.size * 0.9}px;font-size:${title.size * 0.13}px">REMASTERED</div>`}` : ''}</div>
+<div class="a" id="a">${title ? `<div class="shade"></div><div class="t" id="t">OFFAL</div>${title.noSub ? '' : `<div class="r" style="left:${title.x + title.size * 0.08}px;top:${title.y + title.size * 0.9}px;font-size:${title.size * 0.13}px">${title.sub || 'REMASTERED'}</div>`}` : ''}</div>
 <script>document.fonts.ready.then(() => { window.done = true; });</script></body></html>`;
 const LEFT = (a) => `linear-gradient(90deg, rgba(0,0,0,${a}) 0, rgba(0,0,0,${a * 0.6}) 42%, transparent 66%)`;
 const BOTTOM = (a) => `linear-gradient(0deg, rgba(0,0,0,${a}) 0, rgba(0,0,0,${a * 0.6}) 22%, transparent 45%)`;
@@ -104,6 +104,10 @@ const SPECS = {
   'splash_640x299': { w: 640, h: 299, scene: HERO, title: { x: 28, y: 160, size: 104, shade: LOW(0.85), noSub: true } },
   'main_capsule_1232x706': { w: 1232, h: 706, scene: { ...HERO, camZ: 3.2, lookX: -0.5, fov: 52 }, title: { x: 56, y: 400, size: 215, shade: LOW(0.85) } },
   'library_capsule_600x900': { w: 600, h: 900, scene: { fx: 0, fz: 0, camX: 0.15, camY: 1.3, camZ: 3.1, lookY: 1.55, lookX: 0, fov: 62, turn: -0.08, jaw: 0.75, mode: 'grab', twitch: { x: 0.25, y: 0, z: 0.3, r: 0.15 } }, title: { x: 82, y: 680, size: 135, shade: BOTTOM(0.9) } },
+  // GameJolt (the demo's page): the header is about 4:1 and phones crop its sides, so the title and him sit near the
+  // middle; the thumbnail is 16:9
+  'gamejolt_header_3000x750': { w: 3000, h: 750, scene: { ...HERO, fx: 0.75, camZ: 2.7, fov: 40, lookX: -0.3, lookY: 1.9 }, title: { x: 600, y: 330, size: 330, shade: `radial-gradient(ellipse 40% 70% at 32% 55%, rgba(0,0,0,.8), transparent)`, noSub: true } },
+  'gamejolt_thumb_1280x720': { w: 1280, h: 720, scene: { ...HERO, camZ: 3.2, lookX: -0.5, fov: 52 }, title: { x: 58, y: 400, size: 222, shade: LOW(0.85), sub: 'DEMO' } },
   'icon_1024': { w: 1024, h: 1024, scene: { ...HERO, fx: 0, turn: 0.35, jaw: 0.55, face: { dx: 0.28, dy: 0.02, dz: 0.78, aimX: 0.02, aimY: -0.03, torch: 0.12 }, twitch: { x: 0.12, y: 0, z: 0.22, r: 0.08 }, expo: 0.9, fov: 40 }, title: null },
 };
 for (const [name, spec] of Object.entries(SPECS)) {
