@@ -1889,6 +1889,14 @@ export class Cutscene {
       const sh1 = f.arms[1].sh.getWorldPosition(V()), out1 = sh1.clone().sub(V(f.root.position.x, sh1.y, f.root.position.z)).normalize();
       this.reach(1, sh1.clone().add(V(0, -1.3, 0)).addScaledVector(out1, 0.22).addScaledVector(V(Math.sin(0.8), 0, Math.cos(0.8)), 0.1), V(0, -1, 0).addScaledVector(V(Math.sin(0.8), 0, Math.cos(0.8)), -0.5)); // hanging straight
     }
+    // in the corner his forearm comes up steeply to his mouth, and his long fingers would carry straight on up past his
+    // face, fanned out: the wrist turns them forward over what he's holding
+    // face, fanned out: the wrist turns them forward, and they close round what he's holding
+    f.arms[0].hand.rotation.x = atTable ? 0 : 0.5 * ease((t - CORNER) / 0.3);
+    const grips = atTable ? (t > P[2] + 0.6 && t < FIRE + 0.3 ? 1 : 0.15) : this.heldNow ? 1 : 0.55;
+    this.fk = this.fk === undefined ? grips : this.fk + (grips - this.fk) * Math.min(1, dt * 8);
+    this.fist(0, this.fk);
+    f.root.updateMatrixWorld(true);
     // what he's holding goes where his fingers really are, every frame: it never moves ahead of the hand
     if (!atTable && this.heldNow) {
       const held = this.heldNow, fwd = V(Math.sin(0.8), 0, Math.cos(0.8));
@@ -2146,6 +2154,14 @@ export class Cutscene {
     if (e1.lengthSq() > 1e-8 && pole.lengthSq() > 1e-8) R.premultiply(new THREE.Quaternion().setFromAxisAngle(tp, Math.atan2(tp.dot(e1.clone().cross(pole)), e1.dot(pole))));
     a.sh.quaternion.copy(R);
     f.root.updateMatrixWorld(true);
+  }
+  // his fingers (the remastered hand: four long ones off the palm) closed by k (0 open as built, 1 a fist)
+  fist(j, k) {
+    for (const c of this.him.arms[j].hand.children) {
+      if (!c.isGroup || Math.abs(c.position.y + 0.07) > 0.002) continue;
+      if (c.userData.curl0 === undefined) c.userData.curl0 = c.rotation.x;
+      c.rotation.x = c.userData.curl0 + k * 1.45;
+    }
   }
   // the cleaver in his hand, when the film needs that hand for something else
   cleaver(on) {
