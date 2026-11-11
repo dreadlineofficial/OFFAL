@@ -945,6 +945,43 @@ function stairWallCanvas() {
   speckle(g, W, H, 12, rng);
   return c;
 }
+// B10's work areas each have their own floor: the kill line's drain grating, the boning room's red quarry tiles,
+// the pens' muck and straw, diamond plate where the trucks and pallets go
+function sectionFloorCanvas(kind) {
+  const S = 256, { c, g } = hq(S, S), rng = makeRng(1401 + kind * 13);
+  if (kind === 1) { // steel bar grating over a black channel, blood in the bars
+    g.fillStyle = '#0c0a0a'; g.fillRect(0, 0, S, S);
+    for (let x = 0; x < S; x += 12) { const gr = g.createLinearGradient(x, 0, x + 6, 0); gr.addColorStop(0, '#6a6c6a'); gr.addColorStop(1, '#3a3c3a'); g.fillStyle = gr; g.fillRect(x, 0, 6, S); }
+    for (let y = 0; y < S; y += 64) { g.fillStyle = '#4a4c4a'; g.fillRect(0, y, S, 4); }
+    g.fillStyle = '#7a7c78'; g.fillRect(0, 0, S, 6); g.fillRect(0, S - 6, S, 6);
+    for (let i = 0; i < 6; i++) splat(g, rng() * S, rng() * S, 16 + rng() * 30, rng, BLOOD.dark, 0.55);
+  } else if (kind === 2) { // oxblood quarry tiles, 4 x 4, grout gone black
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const v = rng() * 16 - 8; g.fillStyle = `rgb(${110 + v | 0},${40 + v * 0.4 | 0},${32 + v * 0.3 | 0})`; g.fillRect(x * 64, y * 64, 64, 64); blotches(g, 64, 64, 0, 0, 0, '0,0,0', 0, rng); }
+    for (let i = 0; i < 300; i++) { g.fillStyle = `rgba(${rng() < 0.5 ? '60,16,12' : '150,70,56'},${rng() * 0.3})`; g.fillRect(rng() * S, rng() * S, 2 + rng() * 5, 1 + rng() * 3); }
+    g.fillStyle = '#1a0c0a'; for (let k = 0; k <= 4; k++) { g.fillRect(k * 64 - 2, 0, 4, S); g.fillRect(0, k * 64 - 2, S, 4); }
+    for (let i = 0; i < 3; i++) splat(g, rng() * S, rng() * S, 20 + rng() * 26, rng, BLOOD.dried, 0.5);
+  } else if (kind === 3) { // concrete under muck and straw
+    g.fillStyle = '#5a5246'; g.fillRect(0, 0, S, S);
+    blotches(g, S, S, 80, 10, 50, '50,40,26', 0.4, rng);
+    blotches(g, S, S, 40, 8, 30, '90,80,60', 0.25, rng);
+    for (let i = 0; i < 500; i++) { g.strokeStyle = `rgba(${170 + rng() * 40 | 0},${150 + rng() * 30 | 0},${90 + rng() * 30 | 0},${0.25 + rng() * 0.5})`; g.lineWidth = 1 + rng(); const x = rng() * S, y = rng() * S, a = rng() * 6, l = 6 + rng() * 18; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); } // straw
+    blotches(g, S, S, 20, 6, 22, '30,22,12', 0.45, rng); // dung
+  } else { // diamond plate, scuffed bright where the wheels go
+    g.fillStyle = '#5e6062'; g.fillRect(0, 0, S, S);
+    for (let y = 0; y < S; y += 16) for (let x = (y / 16) % 2 ? 8 : 0; x < S; x += 16) { g.save(); g.translate(x + 4, y + 8); g.rotate((y / 16) % 2 ? 0.8 : -0.8); g.fillStyle = '#7e8284'; g.fillRect(-5, -1.5, 10, 3); g.fillStyle = 'rgba(20,20,20,.5)'; g.fillRect(-5, 1.5, 10, 1); g.restore(); }
+    for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(160,164,166,.12)'; g.fillRect(0, 40 + i * 70 + rng() * 20, S, 18); }
+    blotches(g, S, S, 30, 6, 30, '40,36,30', 0.3, rng);
+    g.fillStyle = 'rgba(30,30,30,.6)'; g.fillRect(0, 0, S, 2); g.fillRect(0, 0, 2, S);
+  }
+  speckle(g, S, S, 12, rng);
+  return c;
+}
+export function sectionFloors(mats) {
+  if (mats.sectionFloors) return mats.sectionFloors;
+  const phong = (o, p) => (TEX.pbr ? stdMat(o, p) : new THREE.MeshPhongMaterial(o));
+  mats.sectionFloors = [null, ...[1, 2, 3, 4].map((k) => { const t = toTex(sectionFloorCanvas(k)); return wetFloor(phong({ map: t, bumpMap: t, bumpScale: k === 1 ? 1.6 : 0.9, shininess: k === 3 ? 4 : 70, specular: k === 3 ? 0x000000 : 0x555555 }, FLOOR_P)); })];
+  return mats.sectionFloors;
+}
 export function stairMaterials(mats) {
   if (mats.stairM) return mats.stairM;
   const phong = (o, p) => (TEX.pbr ? stdMat(o, p) : new THREE.MeshPhongMaterial(o));

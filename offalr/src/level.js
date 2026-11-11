@@ -8,7 +8,7 @@ import { makeRng } from './rng.js';
 import * as P from './props.js';
 import * as P2 from './props2.js';
 import * as P3 from './props3.js';
-import { themeMaterials, stairMaterials, TEX } from './textures.js';
+import { themeMaterials, stairMaterials, sectionFloors, TEX } from './textures.js';
 import { dressArchitecture } from './arch.js';
 import { dressHall } from './hall.js';
 
@@ -173,18 +173,33 @@ function hallRooms(c) {
   const set = (x, y, corr, ri = -1) => { const i = y * W + x; grid[i] = 1; if (corr) corridor[i] = 1; if (ri >= 0) roomOf[i] = ri; };
   // the hall: aisles everywhere first, then the work areas laid over them
   for (let y = top; y <= bottom; y++) for (let x = left; x <= hallR; x++) set(x, y, true);
+  // work areas of different sizes (no two rows alike), 2-tile aisles between; one or two of them run on across an
+  // aisle into the next, so the floor isn't a grid of the same box
   const zw = 9, zh = 8, gap = 2;
-  for (let zy = top; zy + zh - 1 <= bottom - 1; zy += zh + gap) {
-    for (let zx = left; zx + zw - 1 <= hallR - 1; zx += zw + gap) {
-      const ri = rooms.length;
-      rooms.push({ x: zx, y: zy, w: zw, h: zh, type: '' });
-      for (let y = zy; y < zy + zh; y++) for (let x = zx; x < zx + zw; x++) { const i = y * W + x; corridor[i] = 0; roomOf[i] = ri; }
-    }
-  }
+  const spans = (from, to, lo, hi) => {
+    const out = [];
+    for (let p = from; ;) { let w = rng.int(lo, hi); if (p + w - 1 > to) { if (to - p + 1 >= lo) w = to - p + 1; else break; } out.push([p, w]); p += w + gap; if (p > to) break; }
+    const last = out[out.length - 1]; if (last[0] + last[1] - 1 < to) last[1] = to - last[0] + 1; // (no strip left over at the end)
+    return out;
+  };
+  const colsZ = spans(left, hallR - 1, 6, 12), rowsZ = spans(top, bottom - 1, 5, 10);
+  const cell = rowsZ.map(() => colsZ.map(() => -1));
+  const merges = new Set();
+  for (let k = 0; k < 2; k++) { const r = rng.int(0, rowsZ.length - 2), c = rng.int(0, colsZ.length - 1); merges.add(r + ',' + c); } // down into the next row
+  rowsZ.forEach(([zy, h], r) => colsZ.forEach(([zx, w], cI) => {
+    if (cell[r][cI] >= 0) return;
+    let hh = h;
+    if (merges.has(r + ',' + cI) && rowsZ[r + 1]) { hh = rowsZ[r + 1][0] + rowsZ[r + 1][1] - zy; cell[r + 1][cI] = rooms.length; }
+    const ri = rooms.length;
+    cell[r][cI] = ri;
+    rooms.push({ x: zx, y: zy, w, h: hh, type: '' });
+    for (let y = zy; y < zy + hh; y++) for (let x = zx; x < zx + w; x++) { const i = y * W + x; corridor[i] = 0; roomOf[i] = ri; }
+  }));
+  const aisleX = colsZ.slice(0, -1).map(([x, w]) => x + w), aisleY = rowsZ.slice(0, -1).map(([y, h]) => y + h);
   // the lift bay, open to the hall along its top
   for (let y = ly; y < ly + lh; y++) for (let x = lx; x < lx + lw; x++) { const i = y * W + x; grid[i] = 1; corridor[i] = 0; roomOf[i] = 0; }
   // the columns: a line down the near lane of every aisle between work areas, one every five tiles
-  for (let x = left + zw; x < hallR; x += zw + gap) for (let y = top + 3; y <= bottom - 1; y += 5) { const i = y * W + x; grid[i] = 0; corridor[i] = 0; }
+  for (const x of aisleX) for (let y = top + 3; y <= bottom - 1; y += 5) { const i = y * W + x; if (!corridor[i]) continue; grid[i] = 0; corridor[i] = 0; } // (not where a work area runs across the aisle)
   // the annex: two big rooms, one above the other, joined by a wide opening; one door from the hall
   const mid = top + ((bottom - top) >> 1);
   const A = rooms.length; rooms.push({ x: ex0, y: mid + 1, w: annexW, h: bottom - mid, type: '' });
@@ -226,7 +241,7 @@ function hallRooms(c) {
     }
   }
   rooms.forEach((r) => { r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1); });
-  c.hallInfo = { left, top, bottom, hallR, ex0, annexW, zw, zh, gap, houseH: 2.6 };
+  c.hallInfo = { left, top, bottom, hallR, ex0, annexW, zw, zh, gap, houseH: 2.6, aisleX, aisleY, colsZ, rowsZ };
   return { ax, ay };
 }
 
@@ -676,6 +691,7 @@ function buildStairwell(L, mats, group, out, st, hallSide, name) {
   group.add(sign);
 }
 
+const SECTION_FLOOR = { line: 1, wash: 1, butcher: 2, mincer: 2, pens: 3, packing: 4, racks: 4 };
 export function buildLevel(L, mats) {
   const rng = makeRng(L.seed * 7 + 3);
   const { W, H, grid, D } = L;
@@ -740,7 +756,8 @@ export function buildLevel(L, mats) {
     else if (!D.intro && rng() < 0.06 + D.gore * 0.05 + goreBoost * 0.1) fk = 1;
     else if (L.corridor[i] && rng() < 0.08) fk = 3;
     if (fk) out.bloodTiles[i] = 1;
-    buf(floorBufs, rk * 1000 + fk).quad([x * TILE, 0, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], rng() < 0.5);
+    const sec = L.hall && !rk && room && !room.fixed ? SECTION_FLOOR[room.type] || 0 : 0; // (B10's work areas: their own floors)
+    buf(floorBufs, rk * 1000 + (sec ? 100 + sec : fk)).quad([x * TILE, 0, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], rng() < 0.5);
     const ch = low.has(i) ? WALL_H : CEIL;
     ceilOf().quad([x * TILE, ch, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false);
   }
@@ -779,7 +796,7 @@ export function buildLevel(L, mats) {
   const TM = themeMaterials(mats, L.depth === 0 && L.theme === 'offices' ? 'hiring' : L.hall ? 'plant98' : L.depth === 9 && (L.theme || 'plant') === 'plant' ? 'smokehouse' : L.theme || 'plant'); // (the hiring office: its own surfaces, not Administration's)
   const TMs = [TM, themeMaterials(mats, 'mgmt'), themeMaterials(mats, 'boiler')]; // (B10: the hall, upstairs, below)
   for (const [key, g] of wallBufs) { const T = TMs[(key / 1000) | 0], k = key % 1000; const m = P.mesh(g.build(), k === HOUSE ? (T && T.upper) || mats.darkMetal : k === UPPER ? (T && T.upper) || (T ? T.walls[0] : mats.walls[0]) : T ? T.walls[Math.floor(k / 3)] : mats.walls[k], false); group.add(m); }
-  for (const [key, g] of floorBufs) { const T = TMs[(key / 1000) | 0], k = key % 1000; const m = P.mesh(g.build(), T ? T.floors[k] : mats.floors[k], false); group.add(m); }
+  for (const [key, g] of floorBufs) { const T = TMs[(key / 1000) | 0], k = key % 1000; const m = P.mesh(g.build(), k > 100 ? sectionFloors(mats)[k - 100] : T ? T.floors[k] : mats.floors[k], false); group.add(m); }
   for (const [r, g] of ceils) { const T = TMs[r]; group.add(P.mesh(g.build(), T ? T.ceil : mats.ceil, false)); }
   for (const s of L.stairs || []) { buildStairwell(L, mats, group, out, s.a, true, s.name); buildStairwell(L, mats, group, out, s.b, false, s.name); }
   if (TEX.pbr) dressArchitecture(L, mats, group, L.theme || 'plant'); // the remaster's rails, pipes, beams and frames

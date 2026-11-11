@@ -104,13 +104,18 @@ function dress(L, mats, group, out, h) {
       group.add(rod(dark, px, pz, deckY + 1.05, CEIL - 1.5, 0.025));
     }
   };
-  for (let x = hi.left + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) catwalk(tc(x + 1), (hi.top + 0.5) * TILE, tc(x + 1), (hi.bottom + 0.5) * TILE);
-  const midRow = hi.top + 2 * (hi.zh + hi.gap) - hi.gap;
+  // (over two of the aisles, not every one: one down the hall, one across it)
+  const AX = hi.aisleX, AY = hi.aisleY;
+  const cwX = AX[Math.min(AX.length - 1, 1)], midRow = AY[Math.min(AY.length - 1, (AY.length / 2) | 0)];
+  catwalk(tc(cwX + 1), (hi.top + 0.5) * TILE, tc(cwX + 1), (hi.bottom + 0.5) * TILE);
   catwalk(x0 + 1, tc(midRow) + 1, x1 - 1, tc(midRow) + 1);
 
   // ---- red-and-white lane lines down both sides of every aisle, the way a new plant marks its walkways ----
-  for (let x = hi.left + hi.zw; x < hi.hallR; x += hi.zw + hi.gap) for (const e of [x * TILE + 0.12, (x + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, e, (hi.top + hi.bottom + 1) / 2 * TILE, 0.14, (hi.bottom - hi.top + 1) * TILE - 0.4, 0, 1);
-  for (let y = hi.top + hi.zh; y < hi.bottom; y += hi.zh + hi.gap) for (const e of [y * TILE + 0.12, (y + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, (hi.left + hi.hallR + 1) / 2 * TILE, e, 0.14, (hi.hallR - hi.left + 1) * TILE - 0.4, Math.PI / 2, 1);
+  // (only where the aisle is an aisle: a work area that runs across one breaks its lines)
+  const runs = (fixed, from, to, at) => { const out2 = []; let s0 = -1; for (let t = from; t <= to + 1; t++) { const ok = t <= to && at(t); if (ok && s0 < 0) s0 = t; if (!ok && s0 >= 0) { out2.push([s0, t - 1]); s0 = -1; } } return out2; };
+  const aisle = (x, y) => L.corridor[y * W + x] || !L.grid[y * W + x];
+  for (const x of AX) for (const [a, b] of runs(x, hi.top, hi.bottom, (y) => aisle(x, y) && aisle(x + 1, y))) for (const e of [x * TILE + 0.12, (x + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, e, (a + b + 1) / 2 * TILE, 0.14, (b - a + 1) * TILE - 0.4, 0, 1);
+  for (const y of AY) for (const [a, b] of runs(y, hi.left, hi.hallR, (x) => aisle(x, y) && aisle(x, y + 1))) for (const e of [y * TILE + 0.12, (y + hi.gap) * TILE - 0.12]) floorMark(group, M.lane, (a + b + 1) / 2 * TILE, e, 0.14, (b - a + 1) * TILE - 0.4, Math.PI / 2, 1);
 
   // ---- set pieces: the things only this floor has. Nothing here explains itself ----
   const reserve = (tiles) => { // claim floor tiles for something, if every one of them can be given up
@@ -251,6 +256,24 @@ function dress(L, mats, group, out, h) {
       for (let y = 0.3; y < 5.6; y += 0.3) { const rung = mesh(box(0.03, 0.03, 0.4), rust); rung.position.set(1.32, y, 0); g.add(rung); }
       const pipe = mesh(cyl(0.12, 0.12, 1, 10), mats.rust[1]); pipe.scale.y = CEIL - 5.6; pipe.position.set(-0.5, 5.6 + (CEIL - 5.6) / 2, 0.3); g.add(pipe);
       const motor = mesh(box(0.7, 0.5, 0.5), red, true); motor.position.set(0, 5.85, 0); g.add(motor);
+    } else if (kind === 'scald') { // a scalding tank: a long steel trough of black water, the steam pipe along it, a hoist over
+      const tank = mesh(box(3.6, 1.1, 1.7), steel, true); tank.position.y = 0.55; g.add(tank);
+      const water = mesh(box(3.4, 0.02, 1.5), mats.blackWater || dark); water.position.y = 1.02; g.add(water);
+      const lip = mesh(box(3.7, 0.08, 1.8), dark); lip.position.y = 1.12; g.add(lip);
+      const steam = mesh(cyl(0.07, 0.07, 3.5, 8), mats.rust[1]); steam.rotation.z = Math.PI / 2; steam.position.set(0, 0.9, 0.95); g.add(steam);
+      for (const sx of [-1.6, 1.6]) { const post = mesh(box(0.14, 3.6, 0.14), red, true); post.position.set(sx, 1.8, -1.0); g.add(post); }
+      const beam = mesh(box(3.6, 0.2, 0.14), red); beam.position.set(0, 3.6, -1.0); g.add(beam);
+      const hoist = mesh(box(0.3, 0.35, 0.3), dark); hoist.position.set(0.4, 3.35, -1.0); g.add(hoist);
+      const ch = mesh(cyl(0.012, 0.012, 1.9, 4), chain); ch.position.set(0.4, 2.2, -1.0); g.add(ch);
+    } else if (kind === 'saw') { // the splitting stand: a raised red platform, its steps, the saw hung on its arm
+      const deck = mesh(box(2.4, 0.12, 1.6), M.galv, true); deck.position.y = 1.4; g.add(deck);
+      for (const [lx, lz] of [[1.1, 0.7], [1.1, -0.7], [-1.1, 0.7], [-1.1, -0.7]]) { const leg = mesh(box(0.1, 1.4, 0.1), red); leg.position.set(lx, 0.7, lz); g.add(leg); }
+      for (const lz of [0.75, -0.75]) { const rail = mesh(box(2.4, 0.05, 0.05), red); rail.position.set(0, 2.45, lz); g.add(rail); for (const lx of [-1.15, 0, 1.15]) { const p2 = mesh(box(0.05, 1.05, 0.05), red); p2.position.set(lx, 1.95, lz); g.add(p2); } }
+      for (let k = 0; k < 5; k++) { const st = mesh(box(0.3, 0.05, 0.8), M.galv); st.position.set(1.4 + k * 0.28, 1.4 - (k + 1) * 0.27, 0); g.add(st); }
+      const arm = mesh(box(0.12, CEIL - 4.2, 0.12), dark); arm.position.set(-0.3, 4.2 + (CEIL - 4.2) / 2, 0); g.add(arm);
+      const saw = mesh(box(0.25, 1.5, 0.5), steel, true); saw.position.set(-0.3, 3.4, 0); g.add(saw);
+      const blade = mesh(box(0.02, 1.1, 0.42), mats.rust[1]); blade.position.set(-0.3, 2.3, 0); g.add(blade);
+      const handle = mesh(box(0.06, 0.06, 0.6), red); handle.position.set(-0.3, 3.0, 0.4); g.add(handle);
     } else { // a stamping press: two great uprights, a crown, the ram half down, a bed stained dark
       for (const s of [-1, 1]) { const up = mesh(box(0.45, 4.6, 0.9), steel, true); up.position.set(s * 1.25, 2.3, 0); g.add(up); }
       const crown = mesh(box(3.2, 1.0, 1.2), steel, true); crown.position.y = 5.0; g.add(crown);
@@ -264,21 +287,23 @@ function dress(L, mats, group, out, h) {
     g.userData.hall = true;
     return g;
   };
+  const MACHINE = { mincer: 'hopper', vats: 'hopper', packing: 'press', line: 'saw', wash: 'scald', butcher: 'saw' };
   for (let ri = 1; ri < L.rooms.length; ri++) {
     const r = L.rooms[ri];
-    if (r.w * r.h < 40 || r.type === 'lift') continue;
-    let placed = false;
-    for (let y = r.y + 1; y < r.y + r.h - 2 && !placed; y++) for (let x = r.x + 1; x < r.x + r.w - 2 && !placed; x++) {
+    if (r.w * r.h < 30 || r.type === 'lift' || r.fixed || r.storey || !MACHINE[r.type]) continue;
+    let placed = 0;
+    const want = r.type === 'wash' || r.w * r.h >= 90 ? 2 : 1; // (the scalding tanks come in pairs)
+    for (let y = r.y + 1; y < r.y + r.h - 2 && placed < want; y++) for (let x = r.x + 1; x < r.x + r.w - 2 && placed < want; x++) {
       const tiles = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]];
       if (tiles.some(([tx, ty]) => h.used.has(tx + ',' + ty))) continue;
       const done = [];
       for (const [tx, ty] of tiles) { if (!h.canBlock(tx, ty)) break; h.blockTile(tx, ty); done.push([tx, ty]); }
       if (done.length < 4) { for (const [tx, ty] of done) { L.block[ty * W + tx] = 0; h.used.delete(tx + ',' + ty); } continue; }
       const cx = (x + 1) * TILE, cz = (y + 1) * TILE;
-      put(machine(rng() < 0.55 ? 'hopper' : 'press'), cx, 0, cz, rng() < 0.5 ? 0 : Math.PI / 2);
+      put(machine(MACHINE[r.type]), cx, 0, cz, rng() < 0.5 ? 0 : Math.PI / 2);
       h.collider(cx - 1.75, cz - 1.75, cx + 1.75, cz + 1.75);
-      floorMark(group, M.hatch, cx, cz, 4.4, 4.4, 0);
-      placed = true;
+      if (MACHINE[r.type] !== 'scald') floorMark(group, M.hatch, cx, cz, 4.4, 4.4, 0);
+      placed++;
     }
   }
 
@@ -291,9 +316,11 @@ function dress(L, mats, group, out, h) {
   // export crates, stencilled with where they were going
   const crates = () => { const g = new THREE.Group(); const n2 = 1 + ((rng() * 3) | 0); for (let i = 0; i < n2; i++) { const c = new THREE.Mesh(cellGeo(new THREE.BoxGeometry(1.25, 0.9, 1.0), (rng() * PORTS.length) | 0, M.crate.map.userData.grid), M.crate); c.position.set((rng() - 0.5) * 0.08, 0.45 + i * 0.9, (rng() - 0.5) * 0.08); c.rotation.y = (rng() - 0.5) * 0.12; g.add(c); } return g; };
   let forks = 0;
+  const MIX = { packing: [0.12, 0.45, 0.95, 0.97], racks: [0.08, 0.2, 0.85, 0.88], line: [0, 0, 0, 0.6], butcher: [0, 0, 0, 0.7], mincer: [0, 0.05, 0.1, 0.8], wash: [0, 0, 0, 0.5], vats: [0, 0, 0.1, 0.85], pens: [0, 0, 0, 0] }; // (the odds of: forklift, crates, pallets, drums; the rest cages)
   for (let ri = 1; ri < L.rooms.length; ri++) {
     const r = L.rooms[ri];
-    if (r.type === 'lift') continue;
+    if (r.type === 'lift' || r.storey || r.type === 'pens') continue;
+    const mix = MIX[r.type] || [0.12, 0.3, 0.5, 0.75];
     const tiles = [];
     for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (!h.used.has(x + ',' + y)) tiles.push([x, y]);
     rng.shuffle(tiles);
@@ -304,10 +331,10 @@ function dress(L, mats, group, out, h) {
       h.blockTile(x, y);
       const cx = tc(x), cz = tc(y), k = rng();
       let o;
-      if (k < 0.12 && forks < 3 && P2) { o = P2.forklift(mats, rng); forks++; h.collider(cx - 0.6, cz - 1.0, cx + 0.6, cz + 1.0); put(o, cx, 0, cz, rng() < 0.5 ? 0 : Math.PI); }
-      else if (k < 0.3) { o = crates(); h.collider(cx - 0.7, cz - 0.7, cx + 0.7, cz + 0.7); put(o, cx, 0, cz, (rng() < 0.5 ? 0 : Math.PI / 2) + (rng() - 0.5) * 0.15); }
-      else if (k < 0.5) { o = wrapped(); h.collider(cx - 0.62, cz - 0.52, cx + 0.62, cz + 0.52); put(o, cx, 0, cz, (rng() - 0.5) * 0.2); if (rng() < 0.5) { const o2 = wrapped(); put(o2, cx + (rng() - 0.5) * 0.1, 0, cz + 0, 0); o2.position.y = o.children[1].geometry.parameters.height + 0.14; } }
-      else if (k < 0.75) { o = drums(); h.collider(cx - 0.65, cz - 0.65, cx + 0.65, cz + 0.65); put(o, cx, 0, cz, rng() * 6); }
+      if (k < mix[0] && forks < 3 && P2) { o = P2.forklift(mats, rng); forks++; h.collider(cx - 0.6, cz - 1.0, cx + 0.6, cz + 1.0); put(o, cx, 0, cz, rng() < 0.5 ? 0 : Math.PI); }
+      else if (k < mix[1]) { o = crates(); h.collider(cx - 0.7, cz - 0.7, cx + 0.7, cz + 0.7); put(o, cx, 0, cz, (rng() < 0.5 ? 0 : Math.PI / 2) + (rng() - 0.5) * 0.15); }
+      else if (k < mix[2]) { o = wrapped(); h.collider(cx - 0.62, cz - 0.52, cx + 0.62, cz + 0.52); put(o, cx, 0, cz, (rng() - 0.5) * 0.2); if (rng() < 0.5) { const o2 = wrapped(); put(o2, cx + (rng() - 0.5) * 0.1, 0, cz + 0, 0); o2.position.y = o.children[1].geometry.parameters.height + 0.14; } }
+      else if (k < mix[3]) { o = drums(); h.collider(cx - 0.65, cz - 0.65, cx + 0.65, cz + 0.65); put(o, cx, 0, cz, rng() * 6); }
       else { o = cage(); h.collider(cx - 0.45, cz - 0.4, cx + 0.45, cz + 0.4); put(o, cx, 0, cz, rng() * 6); }
       n++;
     }
@@ -319,7 +346,7 @@ function dress(L, mats, group, out, h) {
   const cols = [];
   for (let x = hi.left; x <= hi.hallR; x++) for (let y = hi.top; y <= hi.bottom; y++) if (!L.grid[y * W + x]) cols.push([x, y]);
   // every bay number on one texture (one material for all of them: one draw per block, not one per column)
-  const labels = cols.map(([x]) => `${String.fromCharCode(65 + ((x - hi.left) / (hi.zw + hi.gap) | 0))}-${String(bay++).padStart(2, '0')}`);
+  const labels = cols.map(([x]) => `${String.fromCharCode(65 + Math.max(0, AX.findIndex((a) => a >= x)))}-${String(bay++).padStart(2, '0')}`);
   const plateM = new THREE.MeshPhongMaterial({ map: atlasTex(labels, 128, 64, drawLabel), shininess: 20 });
   let nb = 0;
   cols.forEach(([x, y], ci) => {
@@ -362,14 +389,27 @@ function dress(L, mats, group, out, h) {
   });
 
   // ---- pipe runs under the roof, the length of the hall, on hangers from the trusses ----
-  for (const px of [tc(hi.left + (hi.zw >> 1)), tc(hi.left + hi.zw + hi.gap + (hi.zw >> 1)), tc(hi.left + 2 * (hi.zw + hi.gap) + (hi.zw >> 1))]) {
+  for (const px of hi.colsZ.slice(0, 3).map(([x, w]) => tc(x + (w >> 1)))) {
     const len = (hi.bottom - hi.top + 1) * TILE, cz = (hi.top + hi.bottom + 1) / 2 * TILE;
     for (const [off, r, m] of [[0, 0.22, M.grey2], [0.6, 0.12, red]]) { const p2 = mesh(cyl(r, r, len, 12), m); p2.rotation.x = Math.PI / 2; put(p2, px + off, CEIL - 2.6, cz); }
     for (let z = hi.top * TILE + 3; z < (hi.bottom + 1) * TILE; z += 6) group.add(rod(dark, px + 0.3, z, CEIL - 2.4, CEIL - 1.5, 0.02));
   }
 
+  // ---- over each work area, hung on chains from the roof, what it is (a white board, red letters, and a number) ----
+  const ZONE = { line: 'KILL LINE', pens: 'LAIRAGE', packing: 'PACKING', butcher: 'BONING', mincer: 'MINCING', wash: 'SCALDING', racks: 'CHILL STORE', vats: 'RENDERING' };
+  const zones = L.rooms.filter((r) => !r.fixed && !r.storey && ZONE[r.type] && r.x < hi.ex0);
+  if (zones.length) {
+    const zM = new THREE.MeshPhongMaterial({ map: atlasTex(zones.map((r, i) => [ZONE[r.type], 'AREA ' + (i + 1)]), 1024, 250, (g, it, i) => drawSign(g, it, i + 31)), shininess: 10 });
+    zones.forEach((r, i) => {
+      const cx = (r.x + r.w / 2) * TILE, cz = (r.y + r.h / 2) * TILE, y = 6.2 + (i % 3) * 0.4, yaw = r.w >= r.h ? 0 : Math.PI / 2;
+      const board = new THREE.Mesh(cellGeo(new THREE.BoxGeometry(4.6, 1.12, 0.06), i, zM.map.userData.grid), zM);
+      put(board, cx, y, cz, yaw);
+      for (const sd of [-1.9, 1.9]) group.add(rod(chain, cx + Math.cos(yaw) * sd, cz - Math.sin(yaw) * sd, y + 0.56, CEIL - 0.3, 0.01));
+    });
+  }
+
   // ---- the overhead line: a chain conveyor of hooks round the middle of the hall, running until the line is stopped ----
-  const xa = tc(hi.left + hi.zw + 1), xb = tc(hi.hallR), za = (hi.top + hi.zh + 1) * TILE, zb = (hi.top + 3 * (hi.zh + hi.gap) - hi.gap + 1) * TILE, railY = 4.6;
+  const xa = tc(AX[0] + 1), xb = tc(hi.hallR), za = (AY[0] + 1) * TILE, zb = (AY[Math.min(AY.length - 1, 2)] + 1) * TILE, railY = 4.6;
   const legs = [[xa, za, xb, za], [xb, za, xb, zb], [xb, zb, xa, zb], [xa, zb, xa, za]];
   let perim = 0;
   for (const [x1, z1, x2, z2] of legs) {
