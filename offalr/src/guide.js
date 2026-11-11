@@ -77,6 +77,7 @@ export class Guide {
     const rows = [];
     if (need) rows.push({ text: 'CUT THE TAGS OUT OF THE DEAD', count: `${have + fed}/${need}`, done: have + fed >= need });
     for (const p of pz.list) {
+      if (p.kind === 'parts') continue; // (not a job: where the parts for the jobs are)
       if (pz.chain && !p.solved && p !== pz.step) { rows.push({ text: '???', done: false }); continue; } // (the finale: you find out what's next by getting there)
       rows.push({ text: short(p.title()).replace(/<[^>]+>/g, ''), sub: p.solved ? '' : (p.line() || ''), done: !!p.solved });
     }

@@ -52,8 +52,14 @@ for (const id of ['rope', 'exit', 'grinder', 'fan', 'eaten', 'rack', 'process'])
 await check('B10: jobs unlock one after another', new Function(`const enter = ${enter}; enter('story', 10); const o = window.__offal, pz = o.G.puzzles;
   const order = pz.list.map((x) => x.kind).join(','), br = pz.get('breakers');
   const early = pz.interactables().filter((i) => br.switches.some((s) => s.pos === i.pos) && i.use).length;
-  const seq = []; for (const p of pz.list) { seq.push(pz.step === p); p.solve(); }
-  return { ok: order === 'fuses,keypad,scale,breakers,valves,hooks,override' && early === 0 && seq.every(Boolean) && pz.ready && !!o.G.L.wing, info: order };`));
+  const seq = []; for (const p of pz.list) { if (!p.gates) continue; seq.push(pz.step === p); p.solve(); }
+  return { ok: order === 'parts,fuses,chained,keypad,breakers,valves,hooks,override' && early === 0 && seq.every(Boolean) && pz.ready && !!o.G.L.wing, info: order };`));
+await check('B10: storeys, stairs and parts', new Function(`const enter = ${enter}; enter('story', 10); const o = window.__offal, L = o.G.L, pz = o.G.puzzles, parts = pz.get('parts');
+  const unreached = L.dist.filter((d, i) => L.grid[i] && d < 0).length, regs = new Set(L.region.filter((r) => r !== 255));
+  // up the stairs: the hall's stairwell carries you over into the offices' twin, and the floor under you climbs
+  const s = L.stairs[0], p = new o.THREE.Vector3((s.a.x + 2.5) * 2, 0, (s.a.y + 0.5) * 2); const crossed = !!o.crossPortal(L, p);
+  const hp = parts && parts.items.length === 4 && parts.boxes.length >= 10;
+  return { ok: unreached === 0 && regs.size === 3 && crossed && Math.abs(p.x - (s.b.x + 2.5) * 2) < 0.01 && hp, info: 'unreached ' + unreached + ' storeys ' + regs.size + ' parts ' + (parts && parts.items.length) + '/' + (parts && parts.boxes.length) };`));
 await check('floor card ends on its own (real timers)', () => new Promise((res) => { const o = window.__offal; o.G.state = 'menu'; o.startRun('story', true, 'normal', { floor: 2 }); const t0 = performance.now();
   const iv = setInterval(() => { if (o.G.state !== 'transition' || performance.now() - t0 > 150000) { clearInterval(iv); res({ ok: o.G.state === 'play', info: Math.round((performance.now() - t0) / 1000) + 's' }); } }, 200); }));
 await check('story ending plays through', new Function(`const enter = ${enter}; enter('story', 10); const o = window.__offal; o.G.dev = null; o.startEnding();

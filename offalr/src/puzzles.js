@@ -511,6 +511,7 @@ class Valves {
       g.rotation.y = w.yaw;
       add(g);
       this.valves.push({ sym: s, wheel, pos: w.pos, turned: false, hiss: G.audio.steamLeak(w.pos) });
+      if (ctx.parts) wheel.visible = false; // (B10: the handwheels have been taken off; see Parts)
     }
     this.order = rng.shuffle(this.valves.map((_, i) => i));
     this.progress = 0;
@@ -523,6 +524,7 @@ class Valves {
     add(paper);
     this.note = w.pos;
   }
+  fitted() { for (const v of this.valves) v.wheel.visible = true; }
   get solved() { return this.progress >= this.valves.length; }
   glyphs() { return this.order.map((i, k) => (k < this.progress ? '✓' : this.valves[i].sym.glyph)).join(' '); }
   interactables() {
@@ -1185,6 +1187,129 @@ class Notice {
 
 // the finale's last job: the master override in line control. Everything before it in the chain has to be done; it
 // unlocks the lift, and every light and siren on the floor comes on with it: both of them know where you are now
+// ---------- B10: what's been taken off the machines, hidden round the three storeys ----------
+// Tool chests on the factory floor and below, filing cabinets upstairs: one of each part in one of them. You carry
+// one thing at a time: pick up another and you put down what you had (and he hears it hit the floor).
+export const PARTS = {
+  wheel: { name: 'HANDWHEEL', job: 'valves', fit: 'FIT THE HANDWHEEL', gone: 'THE HANDWHEEL IS GONE', found: 'A valve handwheel. Somebody took it off on purpose.', at: [0, 1] },
+  bkey: { name: 'ISOLATOR KEY', job: 'breakers', fit: 'TURN THE KEY', gone: 'A KEY SWITCH. NO KEY IN IT', found: 'A key on a brass tag: ISOLATORS.', at: [1] },
+  skey: { name: 'DESK KEY', job: 'override', fit: 'UNLOCK THE DESK', gone: 'THE DESK IS LOCKED', found: 'A key on a leather fob: LINE SUPERVISOR.', at: [1, 2] },
+  cutters: { name: 'BOLT CUTTERS', job: 'chained', fit: 'CUT THE CHAIN', gone: 'THE LEVER IS CHAINED DOWN', found: 'Bolt cutters. The jaws are sticky.', at: [2] },
+};
+const JUNK = ['Invoices. A dead mouse.', 'Rags and a jar of screws.', 'Time sheets, every one signed in the same hand.', 'A photograph of the line, 1971. Everyone is smiling.', 'Empty.', 'Rubber gloves. Something has dried in the fingers.', 'Fuse wire, a torch with no batteries.', 'A lunch box. Still full.'];
+function toolChest(mats) {
+  const g = new THREE.Group(), red = new THREE.MeshPhongMaterial({ color: 0x6a1410, shininess: 50, specular: 0x333333 });
+  const body = P.mesh(new THREE.BoxGeometry(0.72, 1.0, 0.46), red); body.position.y = 0.5; g.add(body);
+  for (let i = 0; i < 5; i++) { const d = P.mesh(new THREE.BoxGeometry(0.66, 0.012, 0.01), mats.darkMetal, false); d.position.set(0, 0.2 + i * 0.17, 0.235); g.add(d); const hd = P.mesh(new THREE.BoxGeometry(0.3, 0.025, 0.03), mats.darkMetal, false); hd.position.set(0, 0.26 + i * 0.17, 0.245); g.add(hd); }
+  const lid = P.mesh(new THREE.BoxGeometry(0.74, 0.06, 0.48), mats.darkMetal); lid.position.y = 1.03; g.add(lid);
+  return g;
+}
+function partMesh(id, mats) {
+  const g = new THREE.Group(), red = new THREE.MeshPhongMaterial({ color: 0x8a1a10, shininess: 40 }), brass = new THREE.MeshPhongMaterial({ color: 0xb08a3a, shininess: 80, specular: 0x886622 });
+  if (id === 'wheel') { const w = P.mesh(new THREE.TorusGeometry(0.17, 0.022, 6, 16), red); w.rotation.x = Math.PI / 2; g.add(w); for (let k = 0; k < 3; k++) { const sp = P.mesh(new THREE.BoxGeometry(0.34, 0.02, 0.02), mats.darkMetal, false); sp.rotation.y = (k * Math.PI) / 3; g.add(sp); } g.position.y = 0.03; }
+  else if (id === 'cutters') { for (const s of [-1, 1]) { const h = P.mesh(new THREE.BoxGeometry(0.62, 0.03, 0.03), red); h.position.set(0.1, 0.02, s * 0.05); h.rotation.y = s * 0.12; g.add(h); } const jaw = P.mesh(new THREE.BoxGeometry(0.14, 0.04, 0.09), mats.darkMetal); jaw.position.set(-0.26, 0.02, 0); g.add(jaw); }
+  else { const ring = P.mesh(new THREE.TorusGeometry(0.03, 0.007, 5, 10), brass, false); ring.rotation.x = Math.PI / 2; ring.position.y = 0.01; g.add(ring); const bit = P.mesh(new THREE.BoxGeometry(0.09, 0.01, 0.018), brass, false); bit.position.set(0.07, 0.01, 0); g.add(bit); const tag = P.mesh(new THREE.BoxGeometry(0.07, 0.006, 0.045), id === 'skey' ? new THREE.MeshPhongMaterial({ color: 0x3a2014 }) : brass, false); tag.position.set(-0.06, 0.006, 0); g.add(tag); g.scale.setScalar(1.6); }
+  return g;
+}
+class Parts {
+  constructor(ctx) {
+    const { G, B, mats, rng, add } = ctx;
+    this.kind = 'parts'; this.gates = false; this.ctx = ctx; ctx.parts = this;
+    const L = G.L, reg = (x, y) => (L.region ? L.region[y * L.W + x] : 0);
+    this.boxes = []; this.items = []; this.hand = null; this.fitted = new Set();
+    for (const [r, n] of [[0, 4], [1, 5], [2, 4]]) for (let i = 0; i < n; i++) {
+      const spot = B.takeWall(([x, y]) => reg(x, y) === r && !B.inWing(x, y));
+      if (!spot) break;
+      const cab = r === 1, w = onWall(spot[0], spot[1], spot[2], 0, cab ? 0.31 : 0.24);
+      const o = cab ? P2.filingCabinet(mats, rng, rng() < 0.5) : toolChest(mats);
+      add(o, w.pos.x, w.pos.z, w.yaw);
+      B.colliders.push({ x0: w.pos.x - 0.38, z0: w.pos.z - 0.38, x1: w.pos.x + 0.38, z1: w.pos.z + 0.38, hunters: false });
+      const fx = -Math.sin(w.yaw + Math.PI), fz = -Math.cos(w.yaw + Math.PI); // (out from the wall)
+      this.boxes.push({ pos: new THREE.Vector3(w.pos.x, 0.9, w.pos.z), drop: new THREE.Vector3(w.pos.x + fx * 0.6, 0, w.pos.z + fz * 0.6), cab, region: r, searched: false, item: null, junk: JUNK[(rng() * JUNK.length) | 0] });
+    }
+    for (const id of Object.keys(PARTS)) {
+      const free = this.boxes.filter((b) => !b.item), ok = free.filter((b) => PARTS[id].at.includes(b.region));
+      const b = (ok.length ? ok : free)[(rng() * (ok.length || free.length)) | 0];
+      if (!b) continue;
+      b.item = id;
+      const m = partMesh(id, mats); m.visible = false; add(m, b.drop.x, b.drop.z); m.userData.y0 = m.position.y;
+      this.items.push({ id, mesh: m, state: 'hidden', pos: b.drop.clone() });
+    }
+  }
+  get solved() { return true; }
+  item(id) { return this.items.find((it) => it.id === id); }
+  place(it, pos) { it.pos.copy(pos); it.pos.y = 0; it.mesh.position.set(pos.x, it.mesh.userData.y0, pos.z); it.mesh.visible = true; it.state = 'out'; }
+  take(it) {
+    const G = this.ctx.G;
+    if (this.hand) { // what you had goes down where you stand
+      const pl = G.player, d = new THREE.Vector3(-Math.sin(pl.yaw), 0, -Math.cos(pl.yaw)).multiplyScalar(0.5).add(pl.pos);
+      this.place(this.hand, d);
+      G.audio.clank(d, 0.9); G.noise(d, 11, false, 'other');
+    }
+    it.state = 'hand'; it.mesh.visible = false; this.hand = it;
+    G.audio.pickup();
+  }
+  // a job that needed a part has it now
+  fit(kind) {
+    const it = this.hand;
+    if (!it || PARTS[it.id].job !== kind) return;
+    it.state = 'used'; this.hand = null; this.fitted.add(kind);
+    this.ctx.G.audio.clank(this.ctx.G.player.pos, 0.7);
+    this.show(kind);
+  }
+  show(kind) { const p = this.ctx.G.puzzles && this.ctx.G.puzzles.get(kind); if (p && p.fitted) p.fitted(); }
+  interactables() {
+    const out = [];
+    for (const b of this.boxes) if (!b.searched) out.push({ pos: b.pos, range: 1.6, minFacing: 0.35, hold: 1.6, label: b.cab ? 'HOLD \u2014 GO THROUGH THE CABINET' : 'HOLD \u2014 GO THROUGH THE TOOL CHEST', tick: 'clank', noise: 6,
+      use: () => {
+        b.searched = true;
+        const it = b.item && this.item(b.item);
+        if (it && it.state === 'hidden') { this.place(it, b.drop); UI.message(PARTS[it.id].found, 4); }
+        else UI.message(b.junk, 3);
+      } });
+    for (const it of this.items) if (it.state === 'out') out.push({ pos: new THREE.Vector3(it.pos.x, 0.3, it.pos.z), range: 1.7, minFacing: 0.3, label: (this.hand ? 'SWAP FOR THE ' : 'PICK UP THE ') + PARTS[it.id].name, use: () => this.take(it) });
+    return out;
+  }
+  goals() { return []; }
+  line() { return ''; }
+  title() { return ''; }
+  liftMsg() { return ''; }
+  update(dt) { for (const it of this.items) if (it.state === 'out') it.mesh.rotation.y += dt * 0.0; }
+  save() { return { hand: this.hand ? this.hand.id : null, boxes: this.boxes.map((b) => b.searched), items: this.items.map((it) => [it.id, it.state, +it.pos.x.toFixed(2), +it.pos.z.toFixed(2)]), fitted: [...this.fitted] }; }
+  load(s) {
+    s.boxes.forEach((v, i) => { if (this.boxes[i]) this.boxes[i].searched = v; });
+    for (const [id, state, x, z] of s.items) { const it = this.item(id); if (!it) continue; it.state = state; it.mesh.visible = false; if (state === 'out') this.place(it, new THREE.Vector3(x, 0, z)); }
+    this.hand = s.hand ? this.item(s.hand) : null;
+    this.fitted = new Set(s.fitted);
+    for (const k of this.fitted) this.show(k);
+  }
+}
+// ---------- B10: the lift's lever, chained down and padlocked ----------
+class Chained {
+  constructor(ctx) {
+    const { B, mats } = ctx;
+    this.kind = 'chained'; this.gates = true; this.ctx = ctx; this.cut = false;
+    const lever = B.lift.lever, at = lever ? lever.getWorldPosition(new THREE.Vector3()) : B.lift.pos.clone().setY(1.2);
+    this.pos = at.clone();
+    const g = new THREE.Group(), steel = mats.darkMetal;
+    for (let i = 0; i < 9; i++) { const l = P.mesh(new THREE.TorusGeometry(0.035, 0.009, 5, 10), mats.chain || steel, false); l.position.set(Math.sin(i * 0.7) * 0.07, -0.05 - i * 0.045, Math.cos(i * 0.7) * 0.07); l.rotation.set(i % 2 ? Math.PI / 2 : 0, i * 0.7, 0); g.add(l); }
+    const lock = P.mesh(new THREE.BoxGeometry(0.07, 0.08, 0.03), new THREE.MeshPhongMaterial({ color: 0xb08a3a, shininess: 80 })); lock.position.set(0.05, -0.42, 0.06); g.add(lock);
+    const shackle = P.mesh(new THREE.TorusGeometry(0.025, 0.006, 5, 10, Math.PI), steel, false); shackle.position.set(0.05, -0.38, 0.06); g.add(shackle);
+    g.position.copy(at); B.group.add(g);
+    this.obj = g;
+  }
+  get solved() { return this.cut; }
+  fitted() { this.cut = true; this.obj.visible = false; this.ctx.G.audio.clank(this.pos, 1); UI.message('The chain drops off the lever.', 3); }
+  interactables() { return []; }
+  goals() { return this.cut ? [] : [this.pos]; }
+  line() { return this.cut ? 'THE LEVER \u2713' : 'THE LEVER'; }
+  title() { return this.cut ? '' : 'THE LIFT LEVER IS CHAINED DOWN'; }
+  liftMsg() { return 'THE LEVER IS CHAINED DOWN'; }
+  solve() { if (!this.cut) { this.cut = true; this.obj.visible = false; } }
+  save() { return { cut: this.cut }; }
+  load(s) { if (s.cut) this.solve(); }
+}
+
 class Override {
   constructor(ctx) {
     const { G, B, mats, add } = ctx;
@@ -1272,7 +1397,7 @@ class Override {
   load(s) { if (s.done) { this.done = true; this.show(); this.ctx.G.frenzy = true; this.ctx.G.audio.siren(true); } }
 }
 
-const KINDS = { override: Override, notice: Notice, fuses: Fuses, keypad: Keypad, scale: Scale, valves: Valves, breakers: Breakers, drawers: Drawers, sluices: Sluices, keycard: Keycard, meatkey: MeatKey, bolts: Bolts, hooks: Hooks };
+const KINDS = { parts: Parts, chained: Chained, override: Override, notice: Notice, fuses: Fuses, keypad: Keypad, scale: Scale, valves: Valves, breakers: Breakers, drawers: Drawers, sluices: Sluices, keycard: Keycard, meatkey: MeatKey, bolts: Bolts, hooks: Hooks };
 
 export class Puzzles {
   constructor(G, kinds, seed) {
@@ -1283,29 +1408,49 @@ export class Puzzles {
     const add = (o, x, z, yaw) => { if (x !== undefined) { o.position.x = x; o.position.z = z; } if (yaw !== undefined) o.rotation.y = yaw; B.group.add(o); return o; };
     const ctx = { G, B, mats: G.mats, rng, add, maxDist, chain: !!G.D.chain };
     // keypad first: it needs walls on its own side of the shutter before anything else takes them
-    const order = kinds.slice().sort((a, b) => (a === 'keypad' ? -1 : b === 'keypad' ? 1 : 0));
+    const order = kinds.slice().sort((a, b) => (a === 'keypad' ? -1 : b === 'keypad' ? 1 : 0)).sort((a, b) => (a === 'parts' ? -1 : b === 'parts' ? 1 : 0)); // (the parts first: the jobs look them up)
     this.list = order.map((k) => new KINDS[k](ctx, k === 'fuses' ? (G.depth >= 5 ? 4 : 3) : undefined));
     // the finale's chain: listed (and done) in the floor's own order, and every one of them holds the lift
     this.chain = ctx.chain;
-    if (this.chain) { this.list.sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind)); for (const p of this.list) p.gates = true; }
+    if (this.chain) { this.list.sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind)); for (const p of this.list) if (p.kind !== 'parts') p.gates = true; }
   }
   // the job you're on (the chain only): the first one not done
-  get step() { return this.chain ? this.list.find((p) => !p.solved) || null : null; }
+  get step() { return this.chain ? this.list.find((p) => p.gates && !p.solved) || null : null; }
+  // a job whose machine is missing a part (B10): until it's fitted, that's all there is to do there
+  need(p) {
+    const parts = this.get('parts');
+    if (!parts) return null;
+    const id = Object.keys(PARTS).find((k) => PARTS[k].job === p.kind);
+    if (!id || parts.fitted.has(p.kind)) return null;
+    const its = p.interactables(), pos = its.length ? its[0].pos : p.goals()[0];
+    if (!pos) return null;
+    const has = parts.hand && parts.hand.id === id;
+    return [{ pos, range: 2.2, minFacing: 0.3, hold: has ? 1.4 : undefined, tick: 'clank', label: has ? 'HOLD \u2014 ' + PARTS[id].fit : PARTS[id].gone, use: has ? () => parts.fit(p.kind) : undefined }];
+  }
   get ready() { return this.list.every((p) => !p.gates || p.solved); }
   interactables() {
     if (!this.chain) return this.list.flatMap((p) => p.interactables());
     const cur = this.step;
     let past = false;
     return this.list.flatMap((p) => {
-      if (p === cur) { past = true; return p.interactables(); }
+      if (!p.gates) return p.interactables();
+      if (p === cur) { past = true; return this.need(p) || p.interactables(); }
       if (!past) return p.interactables();
       // a job further down the chain: what's written can be read now; the rest is dead, and says what comes first
       const why = cur.kind === 'fuses' ? 'NO POWER' : 'IT WON\u2019T BUDGE'; // (it doesn't say why: you work that out)
       return p.interactables().map((it) => (/^READ /.test(it.label) ? it : { pos: it.pos, range: it.range, minFacing: it.minFacing, label: why }));
     });
   }
-  goals() { return this.chain ? (this.step ? this.step.goals() : []) : this.list.flatMap((p) => p.goals()); }
+  goals() {
+    if (!this.chain) return this.list.flatMap((p) => p.goals());
+    const st = this.step, parts = this.get('parts');
+    if (!st) return [];
+    const id = parts && Object.keys(PARTS).find((k) => PARTS[k].job === st.kind);
+    if (id && !parts.fitted.has(st.kind) && !(parts.hand && parts.hand.id === id)) { const it = parts.item(id); return it && it.state === 'out' ? [it.pos] : parts.boxes.filter((b) => !b.searched).map((b) => b.pos); }
+    return st.goals();
+  }
   lines() { return (this.chain ? [this.step].filter(Boolean) : this.list).map((p) => p.line()).filter(Boolean); }
+  get parts() { return this.get('parts'); }
   blocker() { return this.chain ? this.step : this.list.find((p) => p.gates && !p.solved) || null; }
   update(dt) { for (const p of this.list) if (p.update) p.update(dt); }
   dispose() { for (const p of this.list) if (p.dispose) p.dispose(); }

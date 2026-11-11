@@ -143,6 +143,9 @@ const ICON = {
   fuse: '<rect x="11" y="14" width="18" height="12" rx="3" fill="rgba(200,220,230,.25)" stroke="#c8d8e0"/><rect x="6" y="15" width="6" height="10" fill="#b08a3a"/><rect x="28" y="15" width="6" height="10" fill="#b08a3a"/><path d="M12 20h16" stroke="#ffb040"/>',
   meat: '<path d="M8 22c0-8 8-13 16-11s10 9 6 15-18 6-22-4z" fill="#8a1410" stroke="#c84a40"/><path d="M14 20c4-3 9-3 12 1" stroke="#e8c8a0" stroke-width="2" fill="none"/><circle cx="31" cy="12" r="3" fill="#e8dcc0"/>',
   card: '<rect x="6" y="10" width="28" height="20" rx="2" fill="#d8d2bc" stroke="#f0e8d0"/><rect x="6" y="14" width="28" height="4" fill="#2a2622"/><rect x="9" y="21" width="7" height="7" fill="#7a6a5a"/>',
+  wheel: '<circle cx="20" cy="20" r="12" fill="none" stroke="#a8241a" stroke-width="3"/><path d="M8 20h24M14 10l12 20M26 10l-12 20" stroke="#8a8680" stroke-width="2"/>',
+  cutters: '<path d="M6 30l16-12M10 34l14-14" stroke="#a8241a" stroke-width="4" stroke-linecap="round"/><path d="M24 18l9-10M26 20l10-7" stroke="#a8a49a" stroke-width="3"/>',
+  crank: '<path d="M8 32V14h14v-6" fill="none" stroke="#a8a49a" stroke-width="3"/><rect x="18" y="4" width="8" height="5" fill="#3a2a20"/>',
   key: '<circle cx="12" cy="20" r="6" fill="none" stroke="#a8a49a" stroke-width="2.5"/><path d="M18 20h16M29 20v6M33 20v5" stroke="#a8a49a" stroke-width="2.5"/>',
 };
 function hotbar(items) {

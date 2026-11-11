@@ -10,8 +10,8 @@ import { fuseBodies, setSculptDetail } from './sculpt.js';
 import { TorchHand, torchCookie } from './viewmodel.js';
 import { Motes } from './motes.js';
 import { detectTier, resolveGfx, applyGfx, renderScale, DynRes, PRESETS, OPTS, LOAD_TIME } from './gfx.js';
-import { makeLayout, buildLevel, lineOfSight, toTile, findPath, collide, regionAt, STOREY_X } from './level.js';
-import { Puzzles } from './puzzles.js';
+import { makeLayout, buildLevel, lineOfSight, toTile, findPath, collide, regionAt, crossPortal, STOREY_X } from './level.js';
+import { Puzzles, PARTS } from './puzzles.js';
 import { Survivor } from './survivor.js';
 import { Cinema, SHOTS } from './cinema.js';
 import { initTouch, tapKey } from './touch.js';
@@ -1946,6 +1946,8 @@ function carried() {
     if (p.kind === 'scale' && p.carry.length) out.push({ id: 'meat', name: 'MEAT', n: p.carry.length, sub: p.carry.map((c) => c.w).join('+') + ' KG' });
     if (p.kind === 'keycard' && p.found) out.push({ id: 'card', name: 'KEYCARD' });
     if (p.kind === 'meatkey' && p.found) out.push({ id: 'key', name: 'CAGE KEY' });
+    if (p.kind === 'parts' && p.hand) out.push({ id: { wheel: 'wheel', cutters: 'cutters' }[p.hand.id] || 'key', name: PARTS[p.hand.id].name }); // (B10: one thing in your hands)
+    if (p.kind === 'hooks' && p.carry && !p.done) out.push({ id: 'crank', name: 'CRANK HANDLE' });
   }
   const ids = out.map((it) => it.id);
   G.slotOrder = (G.slotOrder || []).filter((id) => ids.includes(id));
@@ -2404,6 +2406,6 @@ requestAnimationFrame(frame);
 
 // debug handle for automated checks
 window.__offal = {
-  poseForeman, matsMs, motes, P, mats, GPU, applySettings, G, player, save, audio, gun, renderer, scene, updateEndCine, openFilled, huntSwing, carried, openCollection, startReplay, startRun, KEEPSAKES, camera, startDeath, harvest, hide, director, post, keys, findPath, updateTransition, updateDeath, findInteract, handleInteract, nextFloor, startEnding, UI,
+  THREE, crossPortal, poseForeman, matsMs, motes, P, mats, GPU, applySettings, G, player, save, audio, gun, renderer, scene, updateEndCine, openFilled, huntSwing, carried, openCollection, startReplay, startRun, KEEPSAKES, camera, startDeath, harvest, hide, director, post, keys, findPath, updateTransition, updateDeath, findInteract, handleInteract, nextFloor, startEnding, UI,
   step(dt, n) { for (let i = 0; i < n && G.state === 'play'; i++) { T += dt; updateGame(dt, T); endFrame(); } return G.state; },
 };

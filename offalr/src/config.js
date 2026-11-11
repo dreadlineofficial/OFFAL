@@ -49,7 +49,7 @@ const STORY = [
    
     // the bottom: the main factory floor, one open hall under a roof 12 m up, and one job after another (each needs
     // the last) before the lift will go up
-    size: 56, rooms: 14, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'scale', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, storeys: true, width: 92, ceil: 12, fogBoost: -0.035,
+    size: 56, rooms: 14, tags: 0, hunters: 2, puzzles: ['parts', 'fuses', 'chained', 'keypad', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, storeys: true, width: 92, ceil: 12, fogBoost: -0.035,
     pool: ['line', 'pens', 'packing', 'butcher', 'mincer', 'wash', 'racks', 'line', 'packing', 'pens', 'vats', 'mincer', 'butcher', 'wash', 'racks', 'line'] }, // (every work area a different job: the kill line, the pens, packing, boning, mincing, wash-down, the chill store)
 ];
 
