@@ -79,6 +79,19 @@ node tools/regress-offalr.mjs             # regression, needs the dev server; mu
 
 ## Current state (Nov 2026, v1.0.0)
 Done recently:
+- Nov 2026 batch (owner list): **one Foreman on every floor**; deeper floors make him smarter instead (`D.ai`
+  from config.js: 0 B1–B4, 1 B5–B7 = comes back to where he lost you, longer search, more lockers; 2 B8–B9 = silent
+  `stalk` state creeping after you + waits in the dark where he lost you; 3 B10 = sees 25% further, faster patrol,
+  shorter pauses, hears every sprint, chase speed ×1.03). Floors still roll with the old hunter count (level.js spawn
+  rooms) so layouts don't change; main.js spawns `Math.min(1, D.hunters)`. Sight range up (4+17·vis, cone 0.35),
+  hearing ×1.25, a noise heard while investigating/searching retargets him with no pause. Walk 2.73, crouch 1.28.
+  **Two hotbar slots** (`UI.SLOTS = 2`): `1/2` pick a box, `G` puts it down (main.js `HELD`/`putDown`/`G.drops`,
+  models in drops.js); a third item drops the selected one (`overflow`, Granny-style swap, makes noise); drops are
+  saved as carried (`withDropsHeld` round `snapshot`); touch: tap a box to select, tap again to drop; pad d-pad.
+  Forklift rebuilt (`forklift.js` `forkliftHD`, parts on userData); conveyor stop box on its own post + drive/braces/
+  tray. New B10-only death film `forklift` ("Right of Way", `FLOOR_FILM` in cutscenes.js, weighted ×4 on B10, not
+  in Less gore). Final pass has a CAS sharpen (`sharpen` uniform in postrm.js) against far-off mush; B10 haze darker
+  (fog 0x1d2022). Upstairs (`mgmt`) re-surfaced: damask paper, walnut panelling, herringbone parquet, coffered ceiling.
 - B10 v5 (Nov 2026, owner: "proper floors" = storeys like Granny's house, "mix" puzzles): **storeys** — offices upstairs
   (`mgmt` theme: oak panelling, nicotine wallpaper, carpet) and a boiler room below (`boiler` theme: green/limewash brick,
   wet concrete), laid out east of the hall (x >= `STOREY_X` = 64, `D.width` 92; level.js `storeys`). Each is reached by
