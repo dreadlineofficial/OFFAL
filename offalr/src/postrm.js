@@ -300,7 +300,7 @@ void main(){
 const fragFinal = /* glsl */ `
 uniform sampler2D tLdr;
 uniform vec2 texel, res;
-uniform float time, fear, grainAmt, fxaa, filterMode, filterAmt;
+uniform float time, fear, grainAmt, fxaa, filterMode, filterAmt, sharpen;
 varying vec2 vUv;
 ${common}
 float luma(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -343,6 +343,16 @@ void main(){
     uv = mix(uv, (floor(uv * px) + 0.5) / px, k);
   }
   vec3 col = fxaa > 0.5 && fm != 5 ? fxaaPass(uv) : texture2D(tLdr, uv).rgb;
+  // contrast-adaptive sharpening: the picture is drawn below screen resolution and smoothed by FXAA, and far
+  // surfaces went to mush; this brings their edges back without ringing on the hard ones
+  if (sharpen > 0.0 && fm != 5) {
+    vec3 a = texture2D(tLdr, uv + vec2(0.0, -texel.y)).rgb, b = texture2D(tLdr, uv + vec2(-texel.x, 0.0)).rgb;
+    vec3 d = texture2D(tLdr, uv + vec2(texel.x, 0.0)).rgb, e = texture2D(tLdr, uv + vec2(0.0, texel.y)).rgb;
+    vec3 mn = min(col, min(min(a, b), min(d, e))), mx = max(col, max(max(a, b), max(d, e)));
+    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0));
+    vec3 w = -amp * mix(0.08, 0.2, sharpen);
+    col = clamp((col + (a + b + d + e) * w) / (1.0 + 4.0 * w), 0.0, 1.0);
+  }
   if (fm == 1) {
     // colour smears sideways (the chroma is a fraction of the picture's resolution), blacks lift, lines show
     vec3 sm = vec3(0.0);
@@ -433,7 +443,7 @@ export class RMPipeline {
       lum: sm(fragLum, { tHdr: { value: null }, cell: { value: new THREE.Vector2(1 / 32, 1 / 18) } }),
       adapt: sm(fragAdapt, { tLum: { value: null }, tPrev: { value: null }, dt: { value: 0.016 }, snap: { value: 0 }, key: { value: 0.12 }, brightKey: { value: 0.3 }, lo: { value: 0.07 }, hi: { value: 1.8 } }),
       comp: sm(fragComp, { ...u, tDiffuse: { value: null }, tBloom: { value: null }, tAO: { value: null }, tVol: { value: null }, tExpo: { value: null }, aoOn: { value: 1 }, volOn: { value: 1 }, autoExpo: { value: 1 } }),
-      fin: sm(fragFinal, { tLdr: { value: null }, texel: V2(), res: u.res, time: u.time, fear: u.fear, grainAmt: u.grainAmt, fxaa: { value: 1 }, filterMode: u.filterMode, filterAmt: u.filterAmt }),
+      fin: sm(fragFinal, { tLdr: { value: null }, texel: V2(), res: u.res, time: u.time, fear: u.fear, grainAmt: u.grainAmt, fxaa: { value: 1 }, sharpen: { value: 0.7 }, filterMode: u.filterMode, filterAmt: u.filterAmt }),
     };
     this.m.pick.uniforms.autoExpo = this.m.comp.uniforms.autoExpo;
     this.m.ao.defines = { AO_S: 14 };

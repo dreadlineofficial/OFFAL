@@ -45,7 +45,7 @@ const STORY = [
     size: 52, rooms: 16, tags: 6, hunters: 2, puzzles: ['meatkey'] },
   { name: 'THE QUIET LINE', quote: 'Everything the line made ends up in the smokehouse. The fires never went out.', lamp: 0xffa860, fog: 0x0a0503,
     size: 54, rooms: 17, tags: 6, hunters: 2, puzzles: ['hooks'], deadLamps: 0.5, pool: ['smoke', 'vats', 'line', 'bunks', 'shrine', 'hanging', 'smoke', 'vats', 'lockers', 'pit', 'smoke', 'bunks'], glass: 0.14 }, // the smokehouse: smoke chambers, rendering vats, bunks, a shrine; glass underfoot
-  { name: 'THE LINE', quote: 'This is where it all goes. Stop the line, and the shift is over.', lamp: 0xe2eaf2, fog: 0x2a2e31, // (the newest part of the plant: cold white light, and a haze the far side stands out of)
+  { name: 'THE LINE', quote: 'This is where it all goes. Stop the line, and the shift is over.', lamp: 0xe2eaf2, fog: 0x1d2022, // (the newest part of the plant: cold white light, and a haze the far side stands out of)
    
     // the bottom: the main factory floor, one open hall under a roof 12 m up, and one job after another (each needs
     // the last) before the lift will go up

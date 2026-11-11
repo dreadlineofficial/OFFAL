@@ -853,41 +853,85 @@ function freezeCeilCanvas() {
   return c;
 }
 
-// B10 upstairs, the management floor: dark oak panelling to the dado, a striped paper gone the colour of nicotine
+// B10 upstairs, the management floor: nothing like the plant below. Walnut panelling to shoulder height, a damask
+// flock paper above it (big medallions, so it reads even in the bleach), a picture rail, herringbone parquet, and a
+// plaster ceiling in deep square coffers
+function damask(g, x0, y0, w, h, ink) {
+  g.save(); g.translate(x0 + w / 2, y0 + h / 2); g.fillStyle = ink; g.strokeStyle = ink;
+  // the ogee frame
+  g.lineWidth = 3; g.beginPath(); g.moveTo(0, -h / 2); g.bezierCurveTo(w * 0.45, -h * 0.32, w * 0.2, -h * 0.05, w / 2, 0); g.bezierCurveTo(w * 0.2, h * 0.05, w * 0.45, h * 0.32, 0, h / 2);
+  g.bezierCurveTo(-w * 0.45, h * 0.32, -w * 0.2, h * 0.05, -w / 2, 0); g.bezierCurveTo(-w * 0.2, -h * 0.05, -w * 0.45, -h * 0.32, 0, -h / 2); g.stroke();
+  // the bloom in the middle: a stem, three leaves each side, a bud
+  g.beginPath(); g.ellipse(0, -h * 0.16, w * 0.06, h * 0.1, 0, 0, 7); g.fill();
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(sx * w * (0.08 + i * 0.05), -h * 0.02 + i * h * 0.08, w * 0.09, h * 0.035, sx * (0.5 + i * 0.25), 0, 7); g.fill(); }
+  g.fillRect(-1.5, -h * 0.08, 3, h * 0.3);
+  g.beginPath(); g.ellipse(0, h * 0.25, w * 0.12, h * 0.04, 0, 0, 7); g.fill();
+  g.restore();
+}
 function mgmtWallCanvas(gore) {
   const W = 256, H = 384, { c, g } = hq(W, H), rng = makeRng(1201 + gore * 9);
-  const dado = 236;
-  g.fillStyle = '#b8a77c'; g.fillRect(0, 0, W, dado);
-  for (let x = 0; x < W; x += 32) { g.fillStyle = 'rgba(120,96,50,.22)'; g.fillRect(x, 0, 12, dado); g.fillStyle = 'rgba(255,240,200,.08)'; g.fillRect(x + 14, 0, 2, dado); }
-  const ny = g.createLinearGradient(0, 0, 0, dado); ny.addColorStop(0, 'rgba(90,70,30,.45)'); ny.addColorStop(1, 'rgba(90,70,30,.05)'); g.fillStyle = ny; g.fillRect(0, 0, W, dado); // smoke-yellowed from the top
-  for (let i = 0; i < 6; i++) { const x = rng() * W; g.fillStyle = 'rgba(70,50,20,.18)'; g.fillRect(x, 0, 1.5, dado); } // seams lifting
-  streaks(g, W, dado, 10, '90,70,30', 0.25, rng, true);
-  g.fillStyle = '#3a2214'; g.fillRect(0, dado, W, H - dado);
-  for (let x = 0; x < W; x += 64) { // raised panels
-    g.fillStyle = '#4a2c1a'; g.fillRect(x + 8, dado + 18, 48, H - dado - 44);
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x + 8, dado + 18, 48, 3); g.fillRect(x + 8, dado + 18, 3, H - dado - 44);
-    g.fillStyle = 'rgba(255,200,150,.08)'; g.fillRect(x + 8, H - 29, 48, 3); g.fillRect(x + 53, dado + 18, 3, H - dado - 44);
-    for (let k = 0; k < 14; k++) { g.strokeStyle = `rgba(20,10,4,${rng() * 0.25})`; g.lineWidth = 1; g.beginPath(); const yy = dado + 20 + rng() * (H - dado - 48); g.moveTo(x + 9, yy); g.bezierCurveTo(x + 24, yy + (rng() - 0.5) * 6, x + 40, yy + (rng() - 0.5) * 6, x + 55, yy); g.stroke(); } // grain
+  const rail = 30, dado = 196; // the picture rail near the top; the panelling from the dado down
+  g.fillStyle = '#6e6650'; g.fillRect(0, 0, W, dado);
+  for (let y = rail - 24, row = 0; y < dado + 48; y += 64, row++) for (let x = row % 2 ? -32 : 0; x < W + 32; x += 64) damask(g, x, y, 64, 64, 'rgba(36,30,18,.55)'); // flock, darker than the ground
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(${rng() < 0.5 ? '255,240,200' : '30,24,14'},${rng() * 0.06})`; g.fillRect(rng() * W, rng() * dado, 2, 2); }
+  const ny = g.createLinearGradient(0, 0, 0, dado); ny.addColorStop(0, 'rgba(60,46,20,.55)'); ny.addColorStop(1, 'rgba(60,46,20,0)'); g.fillStyle = ny; g.fillRect(0, 0, W, dado); // decades of cigarettes
+  for (let i = 0; i < 3; i++) { const x = rng() * W, y = rail + rng() * 80; g.fillStyle = 'rgba(200,190,160,.5)'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 18 + rng() * 20, y + 4); g.lineTo(x + 6, y + 30 + rng() * 30); g.fill(); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y, 2, 30); } // paper peeling
+  // picture rail and the cornice above it
+  g.fillStyle = '#d8d0b8'; g.fillRect(0, 0, W, rail - 8); g.fillStyle = 'rgba(0,0,0,.25)'; for (let x = 0; x < W; x += 8) g.fillRect(x, 4, 4, rail - 16); // dentils
+  g.fillStyle = '#2a170c'; g.fillRect(0, rail - 8, W, 8); g.fillStyle = 'rgba(255,220,180,.15)'; g.fillRect(0, rail - 8, W, 2);
+  // the panelling: dark walnut, two tiers of raised fields, a heavy dado cap
+  g.fillStyle = '#2a170c'; g.fillRect(0, dado, W, H - dado);
+  for (let k = 0; k < 220; k++) { g.strokeStyle = `rgba(${rng() < 0.5 ? '70,40,20' : '10,5,2'},${rng() * 0.35})`; g.lineWidth = 1; g.beginPath(); const x = rng() * W; g.moveTo(x, dado); g.bezierCurveTo(x + (rng() - 0.5) * 6, dado + 60, x + (rng() - 0.5) * 6, H - 60, x + (rng() - 0.5) * 4, H); g.stroke(); } // grain
+  for (let x = 0; x < W; x += 64) for (const [y0, y1] of [[dado + 16, dado + 70], [dado + 84, H - 30]]) {
+    g.fillStyle = 'rgba(60,34,16,.6)'; g.fillRect(x + 10, y0, 44, y1 - y0);
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(x + 10, y0, 44, 3); g.fillRect(x + 10, y0, 3, y1 - y0); // shadow on the bevel
+    g.fillStyle = 'rgba(255,210,160,.14)'; g.fillRect(x + 10, y1 - 3, 44, 3); g.fillRect(x + 51, y0, 3, y1 - y0); // light on the other
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x + 62, dado, 2, H - dado); // the joint between boards
   }
-  g.fillStyle = '#5a3820'; g.fillRect(0, dado - 6, W, 10); g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, dado + 4, W, 2); // the dado rail
-  g.fillStyle = '#24140c'; g.fillRect(0, H - 14, W, 14);
-  blotches(g, W, H, 16, 6, 30, '60,40,20', 0.15, rng);
+  g.fillStyle = '#3e2412'; g.fillRect(0, dado - 4, W, 12); g.fillStyle = 'rgba(255,220,180,.18)'; g.fillRect(0, dado - 4, W, 2); g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0, dado + 8, W, 3);
+  g.fillStyle = '#160c06'; g.fillRect(0, H - 18, W, 18); g.fillStyle = 'rgba(255,220,180,.1)'; g.fillRect(0, H - 18, W, 2); // skirting
+  blotches(g, W, H, 10, 6, 26, '30,20,10', 0.15, rng);
   wallBlood(g, W, H, gore, rng);
-  speckle(g, W, H, 10, rng);
+  speckle(g, W, H, 8, rng);
   return c;
 }
-function mgmtFloorCanvas(kind) { // carpet tiles, oxblood and brown, worn to the backing where the chairs went
+function mgmtFloorCanvas(kind) { // herringbone parquet, oak blocks gone dark with polish and dirt, scuffed pale where people walked
   const S = 256, { c, g } = hq(S, S), rng = makeRng(1221 + kind * 5);
-  for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
-    g.fillStyle = (x + y) % 2 ? '#4a2220' : '#3e2420'; g.fillRect(x * 128, y * 128, 128, 128);
-    for (let k = 0; k < 900; k++) { g.fillStyle = `rgba(${rng() < 0.5 ? '90,50,40' : '20,10,8'},${rng() * 0.35})`; const px = x * 128 + rng() * 128, py = y * 128 + rng() * 128; (x + y) % 2 ? g.fillRect(px, py, 1, 3) : g.fillRect(px, py, 3, 1); } // the pile, laid at right angles
+  g.fillStyle = '#2a1a0e'; g.fillRect(0, 0, S, S);
+  const L = 64, Wd = 16; // a block: 64 x 16, laid at 45 degrees, alternate rows the other way
+  g.save(); g.translate(S / 2, S / 2); g.rotate(Math.PI / 4);
+  for (let i = -16; i < 16; i++) for (let j = -16; j < 16; j++) {
+    const along = (i + j) % 2 === 0;
+    const x = i * Wd * 2 + (along ? 0 : Wd), y = j * Wd * 2 - (along ? 0 : Wd);
+    const tone = 60 + rng() * 40;
+    g.fillStyle = `rgb(${tone | 0},${tone * 0.62 | 0},${tone * 0.34 | 0})`;
+    if (along) g.fillRect(x, y, L * 0.5 + Wd, Wd); else g.fillRect(x, y, Wd, L * 0.5 + Wd);
+    g.strokeStyle = 'rgba(10,5,2,.7)'; g.lineWidth = 1.2;
+    if (along) g.strokeRect(x, y, L * 0.5 + Wd, Wd); else g.strokeRect(x, y, Wd, L * 0.5 + Wd);
+    for (let k = 0; k < 3; k++) { g.fillStyle = `rgba(20,10,4,${rng() * 0.3})`; if (along) g.fillRect(x + 2, y + 2 + rng() * (Wd - 4), L * 0.5 + Wd - 4, 1); else g.fillRect(x + 2 + rng() * (Wd - 4), y + 2, 1, L * 0.5 + Wd - 4); }
   }
-  g.fillStyle = 'rgba(10,5,4,.5)'; g.fillRect(0, 127, S, 2); g.fillRect(127, 0, 2, S); g.fillRect(0, 0, S, 1); g.fillRect(0, 0, 1, S);
-  const wear = g.createRadialGradient(S * 0.5, S * 0.55, 10, S * 0.5, S * 0.55, 110); wear.addColorStop(0, 'rgba(110,90,70,.3)'); wear.addColorStop(1, 'rgba(110,90,70,0)'); g.fillStyle = wear; g.fillRect(0, 0, S, S);
-  blotches(g, S, S, 14, 6, 26, '30,15,10', 0.3, rng); // spills
+  g.restore();
+  const wear = g.createRadialGradient(S * 0.5, S * 0.5, 10, S * 0.5, S * 0.5, 130); wear.addColorStop(0, 'rgba(150,120,90,.22)'); wear.addColorStop(1, 'rgba(150,120,90,0)'); g.fillStyle = wear; g.fillRect(0, 0, S, S);
+  blotches(g, S, S, 10, 6, 26, '20,10,6', 0.3, rng);
   if (kind === 1) bloodPool(g, S / 2, S / 2, 40, rng);
   if (kind === 2) splat(g, S / 2, S / 2, 34, rng, BLOOD.dried, 0.7);
-  speckle(g, S, S, 12, rng);
+  speckle(g, S, S, 10, rng);
+  return c;
+}
+// the coffered ceiling: deep squares of moulded plaster, water-stained, one or two with the plaster down
+function mgmtCeilCanvas() {
+  const S = 256, { c, g } = hq(S, S), rng = makeRng(1251);
+  g.fillStyle = '#8a8270'; g.fillRect(0, 0, S, S);
+  for (let y = 0; y < S; y += 128) for (let x = 0; x < S; x += 128) {
+    g.fillStyle = '#5e5848'; g.fillRect(x + 14, y + 14, 100, 100); // the coffer
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x + 14, y + 14, 100, 6); g.fillRect(x + 14, y + 14, 6, 100);
+    g.fillStyle = 'rgba(255,250,230,.2)'; g.fillRect(x + 14, y + 108, 100, 6); g.fillRect(x + 108, y + 14, 6, 100);
+    g.strokeStyle = 'rgba(40,36,28,.6)'; g.lineWidth = 2; g.strokeRect(x + 30, y + 30, 68, 68);
+    g.fillStyle = 'rgba(200,190,170,.5)'; g.beginPath(); g.arc(x + 64, y + 64, 12, 0, 7); g.fill(); // the rose
+    g.strokeStyle = 'rgba(40,36,28,.5)'; for (let k = 0; k < 8; k++) { g.beginPath(); g.moveTo(x + 64, y + 64); g.lineTo(x + 64 + Math.cos(k * 0.785) * 18, y + 64 + Math.sin(k * 0.785) * 18); g.stroke(); }
+  }
+  blotches(g, S, S, 8, 14, 50, '90,70,40', 0.35, rng); // water stains
+  speckle(g, S, S, 10, rng);
   return c;
 }
 // B10 below, the boiler room: brick painted bottle green to the waist and limewashed above, sweating, flaking
@@ -1009,7 +1053,7 @@ export function themeMaterials(mats, theme) {
   else if (theme === 'processing') m = { walls: wall(factoryWallCanvas, 30, 0x2a2a22, 1.4), floors: floor(factoryFloorCanvas, 90, 0x4a2a22), ceil: phong({ map: tx(factoryCeilCanvas()), shininess: 30, specular: 0x222222 }, CEIL_P) };
   else if (theme === 'plant98') m = { walls: wall(plant98WallCanvas, 55, 0x777b7d, 0.7), upper: phong({ map: tx(plant98UpperCanvas()), bumpMap: tx(plant98UpperCanvas()), bumpScale: 0.6, shininess: 60, specular: 0x8a8e90 }, { ...WALL_P, metal: 0.55, roughClean: 0.4 }),
     floors: floor(plant98FloorCanvas, 70, 0x5a5c5a), ceil: phong({ map: tx(plant98CeilCanvas()), shininess: 50, specular: 0x666a6c }, { ...CEIL_P, metal: 0.6 }) };
-  else if (theme === 'mgmt') m = { walls: wall(mgmtWallCanvas, 14, 0x221a10, 0.9), floors: floor(mgmtFloorCanvas, 2, 0x000000), ceil: phong({ map: tx(dropCeiling(1241, [176, 166, 140], '#46402e')), shininess: 4 }, CEIL_P) };
+  else if (theme === 'mgmt') m = { walls: wall(mgmtWallCanvas, 24, 0x2a2016, 1.1), floors: floor(mgmtFloorCanvas, 70, 0x3a2a1a), ceil: phong({ map: tx(mgmtCeilCanvas()), bumpMap: tx(mgmtCeilCanvas()), bumpScale: 1.4, shininess: 6 }, CEIL_P) };
   else if (theme === 'boiler') m = { walls: wall(boilerWallCanvas, 60, 0x334433, 1.6), floors: floor(boilerFloorCanvas, 120, 0x44443a), ceil: phong({ map: tx(boilerCeilCanvas()), shininess: 20, specular: 0x111111 }, CEIL_P) };
   else if (theme === 'freezer') m = { walls: wall(freezeWallCanvas, 50, 0x8899aa, 0.6), floors: floor(freezeFloorCanvas, 60, 0x99aabb), ceil: phong({ map: tx(freezeCeilCanvas()), shininess: 40, specular: 0x666666 }, CEIL_P) };
   else m = null;
