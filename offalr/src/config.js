@@ -49,7 +49,7 @@ const STORY = [
    
     // the bottom: the main factory floor, one open hall under a roof 12 m up, and one job after another (each needs
     // the last) before the lift will go up
-    size: 56, rooms: 14, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'scale', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, ceil: 12, fogBoost: -0.035,
+    size: 56, rooms: 14, tags: 0, hunters: 2, puzzles: ['fuses', 'keypad', 'scale', 'breakers', 'valves', 'hooks', 'override'], finale: true, chain: true, hall: true, storeys: true, width: 92, ceil: 12, fogBoost: -0.035,
     pool: ['line', 'vats', 'pens', 'line', 'butcher', 'vats', 'line', 'pens', 'line', 'vats', 'butcher', 'line', 'vats', 'line'] }, // (one hall of hanging meat: the overhead line carries the rest)
 ];
 
@@ -113,7 +113,7 @@ export function difficulty(depth, mode = 'story', rng = Math.random, diffKey = '
   if (depth === 0) return { ...base, ...pace, batteries: 0, size: 14, rooms: 4, tags: 0, hunters: 0, puzzles: ['notice'], adrenaline: 0, gore: 0, screamers: 0, deadLamps: 0.1, theme: 'offices', intro: true };
   if (mode === 'story') {
     const f = STORY[Math.min(depth, STORY_FLOORS) - 1];
-    return { ...base, ...pace, batteries: batteriesFor(f.size, diffKey), size: f.size, rooms: f.rooms, tags: f.tags, hunters: f.hunters, puzzles: f.puzzles.slice(), finale: !!f.finale, chain: !!f.chain, hall: !!f.hall, ceil: f.ceil || 0,
+    return { ...base, ...pace, batteries: batteriesFor(f.size, diffKey), size: f.size, rooms: f.rooms, tags: f.tags, hunters: f.hunters, puzzles: f.puzzles.slice(), finale: !!f.finale, chain: !!f.chain, hall: !!f.hall, storeys: !!f.storeys, width: f.width || 0, ceil: f.ceil || 0,
       fogBoost: (f.fogBoost || 0) + ((THEMES[f.theme || 'plant'] || {}).fogBoost || 0), deadLamps: f.deadLamps ?? base.deadLamps, theme: f.theme || 'plant', pool: f.pool, glass: f.glass || 0 };
   }
   // overtime: endless, and the puzzles are a lottery

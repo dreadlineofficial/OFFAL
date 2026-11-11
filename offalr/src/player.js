@@ -1,6 +1,6 @@
 // You: a night-shift worker with a dying torch. Everything you do makes noise; running makes a lot.
 import * as THREE from 'three';
-import { collide, toTile, inCrawl } from './level.js';
+import { collide, toTile, inCrawl, groundAt, crossPortal } from './level.js';
 
 export const keys = new Set();
 let pressed = new Set();
@@ -190,6 +190,7 @@ export class Player {
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     if (!(w.dev && w.dev.noclip)) collide(L, B, this.pos, this.foreman ? 0.4 : 0.3, this.foreman, !this.foreman && this.crouch && this.crouchT > 0.75); // the Foreman can't get into a crouchway // crouched, you fit into a crouchway (dev mode: walk through anything)
+    if (L.stairs && crossPortal(L, this.pos) && w.crossed) w.crossed(); // B10: over a landing into the other storey's stairwell
 
     // footsteps are noise
     const v = Math.hypot(this.vel.x, this.vel.z);
@@ -227,7 +228,7 @@ export class Player {
       const h = this.hidden;
       cam.position.set(h.pos.x - h.facing.x * 0.05, 1.55, h.pos.z - h.facing.z * 0.05);
     } else {
-      cam.position.set(this.pos.x, this.eyeY + Math.sin(this.bob * 2) * 0.03 * bob * Math.min(1, v / 2.6), this.pos.z);
+      cam.position.set(this.pos.x, this.eyeY + groundAt(w.L, this.pos.x, this.pos.z) + Math.sin(this.bob * 2) * 0.03 * bob * Math.min(1, v / 2.6), this.pos.z);
     }
     // in or out of a locker: ease from where the camera was to where it's going, instead of a cut
     if (this.lockerMove) {

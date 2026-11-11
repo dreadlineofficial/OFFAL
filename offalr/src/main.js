@@ -10,7 +10,7 @@ import { fuseBodies, setSculptDetail } from './sculpt.js';
 import { TorchHand, torchCookie } from './viewmodel.js';
 import { Motes } from './motes.js';
 import { detectTier, resolveGfx, applyGfx, renderScale, DynRes, PRESETS, OPTS, LOAD_TIME } from './gfx.js';
-import { makeLayout, buildLevel, lineOfSight, toTile, findPath, collide } from './level.js';
+import { makeLayout, buildLevel, lineOfSight, toTile, findPath, collide, regionAt, STOREY_X } from './level.js';
 import { Puzzles } from './puzzles.js';
 import { Survivor } from './survivor.js';
 import { Cinema, SHOTS } from './cinema.js';
@@ -142,6 +142,8 @@ const G = {
     for (const h of G.hunters) h.hear({ pos: pos.clone(), radius: 9999, loud: true, rush: true });
   },
   say(text, secs) { UI.message(text, secs); },
+  // B10: you went up or down a storey. Whoever was on your heels hears which way you went
+  crossed() { for (const h of G.hunters) if (h.state === 'chase') { h.lastSeen = player.pos.clone(); h.lastVel = null; h.path = null; } },
   gasp() {
     audio.gasp();
     UI.message('You can’t hold your breath any longer.', 2.5);
@@ -402,6 +404,20 @@ function loadFloor(depth, seed) {
     upgradeTree(B.group); // finer primitives before the static parts are welded
   }
   if (!window.__noBake) G.bake = bakeStatic(B.group, [B, G.puzzles, G.hunters, director], B.swingers, L.hall ? 32 : undefined);
+  // B10's storeys: everything that never moves goes in a group per storey, and only the one you're on is drawn
+  G.areas = null; G.area = -1;
+  if (L.stairs && !window.__noBake) {
+    G.areas = [0, 1, 2].map(() => new THREE.Group());
+    const bb = new THREE.Box3(), c = new THREE.Vector3();
+    for (const o of B.group.children.slice()) {
+      if (o.matrixAutoUpdate !== false) continue;
+      bb.setFromObject(o);
+      if (bb.isEmpty()) continue;
+      bb.getCenter(c);
+      B.group.remove(o); G.areas[areaOf(c.x, c.z)].add(o);
+    }
+    for (const g of G.areas) B.group.add(g);
+  }
   // the locker scare's body, fused now so opening the locker can't stall. Last, and only on floors with corpses: by then
   // every cache it touches is already filled exactly as in the original, so nothing the game rolls later can shift
   if (REMASTER && B.corpses.length) prewarmLockerBody();
@@ -515,7 +531,7 @@ function startRun(mode = 'story', fresh = false, diff = null, opts = {}) {
   writeSave();
   let snap = opts.resume || null;
   // B10 was rebuilt (a bigger floor, a chain of jobs): a save from the old one starts the new one from the lift
-  if (snap && snap.mode === 'story' && snap.depth === STORY_FLOORS && snap.b10 !== 4) snap = null;
+  if (snap && snap.mode === 'story' && snap.depth === STORY_FLOORS && snap.b10 !== 5) snap = null;
   if (snap) { G.diff = snap.diff; G.runTime = snap.runTime; G.runTags = snap.runTags; }
   else save.snap = null;
   G.trans = { t: 0.8, loaded: false, next: snap ? snap.depth : mode === 'story' ? st.floor : opts.floor || 1, snap };
@@ -978,7 +994,7 @@ function snapshot() {
   if (!G.B || G.mode === 'hunt' || !['play', 'paused'].includes(G.state) || ['closing', 'sealed'].includes(G.lift.phase)) return null;
   const B = G.B;
   return {
-    v: 1, b10: 4, mode: G.mode, diff: G.diff, depth: G.depth, seed: G.floorSeed, at: Date.now(),
+    v: 1, b10: 5, mode: G.mode, diff: G.diff, depth: G.depth, seed: G.floorSeed, at: Date.now(),
     runTime: G.runTime, runTags: G.runTags, floorTime: G.floorTime,
     p: { x: player.pos.x, z: player.pos.z, yaw: player.yaw, pitch: player.pitch, tags: player.tags, battery: player.battery, stamina: player.stamina,
       adrenaline: player.adrenaline, light: player.lightOn, crouch: player.crouch, locker: player.hidden ? B.lockers.indexOf(player.hidden) : -1 },
@@ -1501,6 +1517,7 @@ function updateLamps(t) {
   const B = G.B, pp = player.pos;
   const live = [];
   for (const l of B.lamps) {
+    if (G.areas && areaOf(l.pos.x, l.pos.z) !== G.area) continue; // (another storey's)
     let on = 1;
     if (l.state === 'dead') on = 0;
     else if (l.state === 'flicker') {
@@ -1568,6 +1585,17 @@ function updateLockers(dt) {
   }
 }
 
+// which of B10's storeys a place is in, by where they're laid out (the hall west, upstairs north-east, below south-east)
+function areaOf(x, z) { return x < (STOREY_X - 4) * 2 ? 0 : z < 64 ? 1 : 2; }
+function updateArea() {
+  if (!G.areas) return;
+  const a = regionAt(G.L, player.pos);
+  if (a === G.area) return;
+  G.area = a;
+  G.areas.forEach((g, i) => (g.visible = i === a));
+  scene.fog.color.setHex([G.info.fog, 0x1c1a16, 0x0d100d][a] ?? G.info.fog); // the hall's grey haze; upstairs, stale smoke; below, damp
+  if (G.officeLight) G.officeLight.intensity = [2.2, 0.9, 0.3][a] ?? 2.2;
+}
 function updateGame(dt, t) {
   if (G.mode === 'hunt') { updateHunt(dt); return; }
   const B = G.B;
@@ -1585,6 +1613,7 @@ function updateGame(dt, t) {
   const listen = keys.has('KeyQ') && !player.hidden && !G.frozen;
   if (listen !== !!G.listening) { G.listening = listen; audio.setListen(listen); }
   player.update(dt, G);
+  updateArea();
   if (torchHand) torchHand.update(dt);
   if (motes) { camera.updateMatrixWorld(); motes.update(dt, camera, player.torch, renderer.getDrawingBufferSize(_buf).y * post.q.scale); }
   for (const h of G.hunters) h.update(dt, t);

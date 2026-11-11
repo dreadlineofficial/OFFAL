@@ -8,7 +8,7 @@ import { makeRng } from './rng.js';
 import * as P from './props.js';
 import * as P2 from './props2.js';
 import * as P3 from './props3.js';
-import { themeMaterials, TEX } from './textures.js';
+import { themeMaterials, stairMaterials, TEX } from './textures.js';
 import { dressArchitecture } from './arch.js';
 import { dressHall } from './hall.js';
 
@@ -47,11 +47,15 @@ export function makeLayout(depth, seed, D) {
 function findWing(L) {
   const { W, H, grid, corridor, rooms, alcove } = L;
   const start = alcove.y * W + alcove.x;
+  const links = new Map(); // (B10: up and down the stairs)
+  for (const s of L.stairs || []) { const a = s.a.y * W + s.a.x + 1, b = s.b.y * W + s.b.x + 1; links.set(a, b); links.set(b, a); }
   const reach = (shut) => {
     const seen = new Uint8Array(W * H), q = [start];
     seen[start] = 1;
     for (let h = 0; h < q.length; h++) {
       const c = q[h], cx = c % W, cy = (c / W) | 0;
+      const ln = links.get(c);
+      if (ln !== undefined && !seen[ln]) { seen[ln] = 1; q.push(ln); }
       for (const [dx, dy] of DIRS) {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
@@ -70,6 +74,7 @@ function findWing(L) {
     const ew = !isWall(L, x - 1, y) && !isWall(L, x + 1, y) && isWall(L, x, y - 1) && isWall(L, x, y + 1);
     const ns = !isWall(L, x, y - 1) && !isWall(L, x, y + 1) && isWall(L, x - 1, y) && isWall(L, x + 1, y);
     if (!ew && !ns) continue;
+    if (L.stair && DIRS.some(([dx, dy]) => L.stair[(y + dy) * W + x + dx])) continue; // (a stairwell's door is not a wing's)
     const seen = reach(i);
     const cut = [];
     rooms.forEach((r, ri) => { if (ri > 0 && !seen[r.cy * W + r.cx]) cut.push(ri); });
@@ -158,12 +163,12 @@ function standardRooms(c, nRooms, { size, wide = false, meander = false, extra =
 // aisles between them with a line of columns down each one, the lift in a bay off the south wall, and an annex of
 // two big rooms behind a wall on the east side, with one door through it (the shutter: see findWing)
 function hallRooms(c) {
-  const { rng, W, H, grid, roomOf, corridor, rooms } = c;
-  const lw = 4, lh = 3, lx = (W >> 1) - 2 + rng.int(-3, 3), ly = H - 2 - lh;
+  const { rng, W, H, grid, roomOf, corridor, rooms } = c, HW = c.hallW || W; // (B10's other storeys lie east of the hall)
+  const lw = 4, lh = 3, lx = (HW >> 1) - 2 + rng.int(-3, 3), ly = H - 2 - lh;
   rooms.push({ x: lx, y: ly, w: lw, h: lh, type: 'lift' });
   const ax = lx + rng.int(1, lw - 2), ay = H - 2;
   // a strip of small rooms (4 deep) runs along the north and west walls; the hall starts past them
-  const strip = 4, left = 2 + strip + 1, top = 2 + strip + 1, bottom = ly - 1, annexW = 10, ex0 = W - 2 - annexW, hallR = ex0 - 2; // ex0 - 1 is the dividing wall
+  const strip = 4, left = 2 + strip + 1, top = 2 + strip + 1, bottom = ly - 1, annexW = 10, ex0 = HW - 2 - annexW, hallR = ex0 - 2; // ex0 - 1 is the dividing wall
   const low = (c.low = new Uint8Array(W * H)); // tiles under a 3 m ceiling (the small rooms and their doors)
   const set = (x, y, corr, ri = -1) => { const i = y * W + x; grid[i] = 1; if (corr) corridor[i] = 1; if (ri >= 0) roomOf[i] = ri; };
   // the hall: aisles everywhere first, then the work areas laid over them
@@ -200,7 +205,13 @@ function hallRooms(c) {
   // crouch spaces (he doesn't fit): a vent through the wall from most of the small rooms into the hall
   const crawlAt = (c.hallCrawl = []), house = (c.house = new Uint8Array(W * H));
   const vent = (x, y) => { set(x, y, false); crawlAt.push(y * W + x); };
-  for (let x = left; ;) { const w = rng.int(4, 6); if (x + w - 1 > hallR) break; if (rng() < 0.85) { small(x, 2, w, strip, [x + (w >> 1), 2 + strip]); if (w >= 5 && rng() < 0.75) vent(rng() < 0.5 ? x : x + w - 1, 2 + strip); } x += w + 1; }
+  // (with storeys: two of the slots along the north wall are stairwells, one up and one down; storeys() builds them)
+  const slots = c.storeys ? [rng.int(1, 2), rng.int(4, 5)] : [];
+  c.stairSlots = [];
+  for (let x = left, k = 0; ; k++) {
+    if (slots.includes(k)) { if (x + 2 > hallR) break; c.stairSlots.push(x); x += 4; continue; }
+    const w = rng.int(4, 6); if (x + w - 1 > hallR) break; if (rng() < 0.85) { small(x, 2, w, strip, [x + (w >> 1), 2 + strip]); if (w >= 5 && rng() < 0.75) vent(rng() < 0.5 ? x : x + w - 1, 2 + strip); } x += w + 1;
+  }
   for (let y = top; ;) { const h = rng.int(4, 6); if (y + h - 1 > bottom) break; if (rng() < 0.85) { small(2, y, strip, h, [2 + strip, y + (h >> 1)]); if (h >= 5 && rng() < 0.75) vent(2 + strip, rng() < 0.5 ? y : y + h - 1); } y += h + 1; }
   // and three machine housings out on the floor, 2.6 m of steel with a crawl tunnel through the middle of each
   const zones = rooms.map((r, i) => i).filter((i) => i > 0 && !rooms[i].fixed && rooms[i].x < ex0 && rooms[i].y + rooms[i].h < bottom - 1);
@@ -217,6 +228,138 @@ function hallRooms(c) {
   rooms.forEach((r) => { r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1); });
   c.hallInfo = { left, top, bottom, hallR, ex0, annexW, zw, zh, gap, houseH: 2.6 };
   return { ax, ay };
+}
+
+// ---------- B10's other storeys ----------
+// The offices upstairs and the boiler room below are laid out beside the hall, east of a 16 m band of solid ground
+// (x >= STOREY_X: 32 m bake blocks of their own, so a storey can be hidden while you're on another). A stairwell in
+// the hall and its twin in the other storey are one shaft drawn twice, 6 m apart in height: the two are identical,
+// so you cross from one to the other on the landing without seeing it. A stairwell is 3 x 4 tiles: column 0 the
+// first flight, column 1 the wall between, column 2 the second flight, row 0 the landing; the door is at the foot of
+// the first flight in the hall's, at the head of the second in the twin's.
+export const STOREY_X = 64;
+function stairwell(c, x, y, base, dir) {
+  const { W, grid, low } = c;
+  for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++) {
+    if (k === 1 && r > 0) continue;
+    const i = (y + r) * W + x + k;
+    grid[i] = 1; low[i] = 1; c.stair[i] = 1; c.roomOf[i] = -1; c.corridor[i] = 0;
+    let h0, h1;
+    if (r === 0) h0 = h1 = base + 3 * dir;
+    else if (r === 3) h0 = h1 = k === 0 ? base : base + 6 * dir;
+    else if (k === 0) { h0 = base + (3 - 1.5 * (r - 1)) * dir; h1 = h0 - 1.5 * dir; }
+    else { h0 = base + (3 + 1.5 * (r - 1)) * dir; h1 = h0 + 1.5 * dir; }
+    c.gh0[i] = h0; c.gh1[i] = h1;
+  }
+  return { x, y, base, dir };
+}
+function storeys(c) {
+  const { rng, W, H, grid, roomOf, corridor, rooms, low } = c;
+  c.gh0 = new Float32Array(W * H); c.gh1 = new Float32Array(W * H); c.stair = new Uint8Array(W * H);
+  const set = (x, y, corr, ri = -1) => { const i = y * W + x; grid[i] = 1; low[i] = 1; if (corr) corridor[i] = 1; if (ri >= 0) roomOf[i] = ri; };
+  const room = (x, y, w, h, type, storey) => { const ri = rooms.length; rooms.push({ x, y, w, h, type, fixed: true, storey }); for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) set(xx, yy, false, ri); return ri; };
+  const hall = (x0, x1, y0, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, true); };
+  // a band of rooms side by side, each with a door onto the corridor above it and/or below it
+  const band = (x0, x1, y, h, up, down, kinds, storey, wide = false) => {
+    let k = 0;
+    for (let x = x0; x <= x1 - 2;) {
+      let w = wide ? rng.int(6, 10) : rng.int(4, 7);
+      if (x + w - 1 > x1 || x1 - (x + w - 1) < 4) w = x1 - x + 1;
+      if (w < 3) break;
+      room(x, y, w, h, kinds[k++ % kinds.length], storey);
+      const ways = up !== null && down !== null ? (rng() < 0.35 ? [up, down] : [rng() < 0.5 ? up : down]) : [up ?? down];
+      for (const wy of ways) set(rng.int(x + 1, x + w - 2), wy, true);
+      x += w + 1;
+    }
+  };
+  const X0 = STOREY_X, X1 = W - 3, [ua, da] = c.stairSlots;
+  c.stairs = [];
+  // upstairs: management. Corridors east-west, rooms between, joined at both ends so there's always a way round
+  {
+    const bx = X0 + 2 + rng.int(0, 8), A = stairwell(c, ua, 2, 0, 1), B = stairwell(c, bx, 2, -6, 1);
+    set(ua, 6, true); set(bx + 2, 6, true);
+    c.stairs.push({ a: A, b: B, region: 1, ox: bx - ua, oz: 0, name: 'OFFICES' });
+    hall(X0, X1, 7, 8); hall(X0, X1, 17, 18); hall(X0, X0 + 1, 9, 16); hall(X1 - 1, X1, 9, 16);
+    const kinds = rng.shuffle(['office', 'records', 'copy', 'office', 'breakroom', 'lockers', 'office', 'meeting']);
+    if (bx - 2 >= X0 + 3) band(X0, bx - 2, 2, 4, null, 6, kinds, 1);
+    band(bx + 4, X1, 2, 4, null, 6, kinds.slice(3), 1);
+    band(X0 + 3, X1 - 3, 10, 6, 9, 16, rng.shuffle(['office', 'meeting', 'records', 'office', 'shrine', 'copy']), 1);
+    band(X0, X1, 20, 8, 19, null, rng.shuffle(['openplan', 'meeting', 'office', 'openplan']), 1, true);
+  }
+  // below: the boiler room, the pumps, the drains
+  {
+    const by = 34, bx = X0 + 2 + rng.int(0, 8), A = stairwell(c, da, 2, 0, -1), B = stairwell(c, bx, by, 6, -1);
+    set(da, 6, true); set(bx + 2, by + 4, true);
+    c.stairs.push({ a: A, b: B, region: 2, ox: bx - da, oz: by - 2, name: 'BOILER ROOM' });
+    hall(X0, X1, 39, 40); hall(X0, X1, 49, 50); hall(X0, X0 + 1, 41, 48); hall(X1 - 1, X1, 41, 48);
+    if (bx - 2 >= X0 + 3) band(X0, bx - 2, by, 4, null, by + 4, ['lockers', 'pumproom'], 2);
+    band(bx + 4, X1, by, 4, null, by + 4, rng.shuffle(['pumproom', 'junction', 'lockers']), 2);
+    band(X0 + 3, X1 - 3, 42, 6, 41, 48, rng.shuffle(['vats', 'cistern', 'pumproom', 'vats', 'junction']), 2, true);
+    band(X0, X1, 52, Math.min(3, H - 2 - 52 + 1), 51, null, rng.shuffle(['pumproom', 'lockers', 'junction', 'cistern']), 2);
+  }
+  rooms.forEach((r) => { r.cx = r.x + (r.w >> 1); r.cy = r.y + (r.h >> 1); });
+}
+// which storey each tile is on: 0 the hall (what the lift is joined to), then each stairwell's twin's side
+function regions(c, ax, ay) {
+  const { W, H, grid } = c, reg = new Uint8Array(W * H).fill(255);
+  const fill = (start, id) => {
+    if (reg[start] !== 255) return;
+    const q = [start]; reg[start] = id;
+    for (let h = 0; h < q.length; h++) { const i = q[h], x = i % W, y = (i / W) | 0; for (const [dx, dy] of DIRS) { const n = (y + dy) * W + x + dx; if (x + dx >= 0 && y + dy >= 0 && x + dx < W && y + dy < H && grid[n] && reg[n] === 255) { reg[n] = id; q.push(n); } } }
+  };
+  fill(ay * W + ax, 0);
+  for (const s of c.stairs) fill(s.b.y * W + s.b.x + 1, s.region);
+  return reg;
+}
+// how high the floor is here (stairs; everywhere else 0)
+export function groundAt(L, x, z) {
+  if (!L || !L.gh0) return 0;
+  const tx = Math.floor(x / TILE), tz = Math.floor(z / TILE);
+  if (tx < 0 || tz < 0 || tx >= L.W || tz >= L.H) return 0;
+  const i = tz * L.W + tx, f = z / TILE - tz;
+  return L.gh0[i] + (L.gh1[i] - L.gh0[i]) * f;
+}
+export function regionAt(L, p) {
+  if (!L || !L.region) return 0;
+  const tx = Math.floor(p.x / TILE), tz = Math.floor(p.z / TILE);
+  if (tx < 0 || tz < 0 || tx >= L.W || tz >= L.H) return 0;
+  const r = L.region[tz * L.W + tx];
+  return r === 255 ? 0 : r;
+}
+// carried across a landing into the twin stairwell (moves p; returns the stairwell pair, or null)
+export function crossPortal(L, p) {
+  if (!L || !L.stairs) return null;
+  const tx = Math.floor(p.x / TILE), tz = Math.floor(p.z / TILE);
+  for (const s of L.stairs) {
+    for (const [st, sign, side] of [[s.a, 1, 2], [s.b, -1, 0]]) {
+      const col = tx - st.x, row = tz - st.y;
+      if (col < 0 || col > 2 || row < 0 || row > 3) continue;
+      const mid = (st.x + 1.5) * TILE;
+      if (col === side || (row === 0 && (sign > 0 ? p.x > mid : p.x < mid))) { p.x += sign * s.ox * TILE; p.z += sign * s.oz * TILE; return s; }
+    }
+  }
+  return null;
+}
+// where to head for to get to b from a: b itself on the same storey, or the stairwell that leads toward it
+export function routeTo(L, a, b) {
+  if (!L || !L.stairs) return b;
+  const ra = regionAt(L, a), rb = regionAt(L, b);
+  if (ra === rb) return b;
+  const s = L.stairs.find((q) => q.region === (ra === 0 ? rb : ra));
+  if (!s) return b;
+  const st = ra === 0 ? s.a : s.b, col = ra === 0 ? 2 : 0;
+  return new THREE.Vector3((st.x + col + 0.5) * TILE, 0, (st.y + 1.5) * TILE);
+}
+// roughly how far apart two places are on foot, by way of the stairs if they're on different storeys
+export function travelDist(L, a, b) {
+  let d = 0, p = a;
+  for (let k = 0; k < 3; k++) {
+    const w = routeTo(L, p, b);
+    if (w === b) return d + Math.hypot(b.x - p.x, b.z - p.z);
+    d += Math.hypot(w.x - p.x, w.z - p.z);
+    p = w.clone(); crossPortal(L, p);
+  }
+  return d + Math.hypot(b.x - p.x, b.z - p.z);
 }
 
 // the morgue is a hospital wing, laid out on a plan: long two-tile halls running east-west, rows of rooms
@@ -305,14 +448,14 @@ function wardRooms(c) {
 
 export function generateLayout(depth, seed, D = difficulty(depth)) {
   const rng = makeRng(seed);
-  const W = D.size, H = D.size;
+  const W = D.width || D.size, H = D.size;
   const grid = new Uint8Array(W * H);
   const roomOf = new Int16Array(W * H).fill(-1);
   const corridor = new Uint8Array(W * H);
   const rooms = [];
 
   const theme = D.theme || 'plant';
-  const c = { rng, W, H, grid, roomOf, corridor, rooms, keypad: !!(D.puzzles && D.puzzles.includes('keypad')) };
+  const c = { rng, W, H, grid, roomOf, corridor, rooms, keypad: !!(D.puzzles && D.puzzles.includes('keypad')), hallW: D.size, storeys: !!D.storeys };
   const { ax, ay } = theme === 'morgue' ? wardRooms(c)
     : theme === 'offices' ? standardRooms(c, D.rooms, { size: (i) => (i < 3 ? [rng.int(8, 12), rng.int(6, 9)] : [rng.int(3, 5), rng.int(3, 4)]), wide: true, extra: 0.4 })
     : theme === 'sewer' ? standardRooms(c, D.rooms, { size: () => { const k = rng.int(3, 5); return [k, k + rng.int(-1, 1)]; }, meander: true, extra: 0.6 })
@@ -321,6 +464,7 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     : D.hall ? hallRooms(c) // B10: the factory floor
     : standardRooms(c, D.rooms, { size: () => [rng.int(3, 7), rng.int(3, 6)], extra: c.keypad ? 0.2 : 0.45 });
   grid[ay * W + ax] = 1;
+  if (c.storeys) storeys(c); // B10: the offices upstairs, the boiler room below
 
   // crouchways: low crawl tunnels through the rock, out of dead ends and as a few shortcuts. You fit; he doesn't.
   // (their own rng, so the rest of a floor comes out the same as it always did for a given seed)
@@ -419,8 +563,12 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
   const dist = new Int32Array(W * H).fill(-1);
   const q = [ay * W + ax];
   dist[q[0]] = 0;
+  const links = new Map(); // (a stairwell's landing and its twin's are the same place)
+  for (const s of c.stairs || []) { const a = s.a.y * W + s.a.x + 1, b = s.b.y * W + s.b.x + 1; links.set(a, b); links.set(b, a); }
   for (let h = 0; h < q.length; h++) {
     const c = q[h], cx = c % W, cy = (c / W) | 0;
+    const ln = links.get(c);
+    if (ln !== undefined && dist[ln] < 0) { dist[ln] = dist[c] + 1; q.push(ln); }
     for (const [dx, dy] of DIRS) {
       const nx = cx + dx, ny = cy + dy, n = ny * W + nx;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H || !grid[n] || dist[n] >= 0) continue;
@@ -434,7 +582,8 @@ export function generateLayout(depth, seed, D = difficulty(depth)) {
     for (let i = 0; i < W * H; i++) if (corridor[i] && !crawl[i]) water[i] = 1;
     rooms.forEach((r, ri) => { if (r.type === 'cistern') for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) water[y * W + x] = 1; });
   }
-  return { depth, seed, W, H, grid, roomOf, corridor, crawl, water, theme, rooms, alcove: { x: ax, y: ay }, dist, block: new Uint8Array(W * H), D, hall: !!D.hall, hallInfo: c.hallInfo, low: c.low, house: c.house, ceil: Math.max(WALL_H, D.ceil || 0) };
+  return { depth, seed, W, H, grid, roomOf, corridor, crawl, water, theme, rooms, alcove: { x: ax, y: ay }, dist, block: new Uint8Array(W * H), D, hall: !!D.hall, hallInfo: c.hallInfo, low: c.low, house: c.house, ceil: Math.max(WALL_H, D.ceil || 0),
+    ...(c.stairs ? { stairs: c.stairs, stair: c.stair, gh0: c.gh0, gh1: c.gh1, region: regions(c, ax, ay) } : {}) };
 }
 
 // ---------- geometry ----------
@@ -457,6 +606,76 @@ class Geo {
   }
 }
 
+// one stairwell of a twin pair (see storeys): built from its own corner and the height of its first flight's foot,
+// so the two come out identical but for which end has the door. hallSide: the one in the hall (door at the foot)
+function buildStairwell(L, mats, group, out, st, hallSide, name) {
+  const d = st.dir, g = new THREE.Group(), walls = new Geo(), floors = new Geo(), steps = new Geo(), ceil = new Geo();
+  g.position.set(st.x * TILE, st.base, st.y * TILE);
+  const T = TILE, lo = Math.min(0, 6 * d) - 0.2, hi = Math.max(0, 6 * d) + WALL_H;
+  const wall = (x0, z0, x1, z1, y0, y1, n) => { // a face from (x0,z0) to (x1,z1), seen from the side n points to
+    const r = [x1 - x0, 0, z1 - z0];
+    const flip = r[0] * n[2] - r[2] * n[0] < 0; // (quad winding: r x up must point along n)
+    if (flip) walls.quad([x1, y0, z1], [-r[0], 0, -r[2]], [0, y1 - y0, 0], n, false);
+    else walls.quad([x0, y0, z0], r, [0, y1 - y0, 0], n, false);
+  };
+  wall(0, 0, 3 * T, 0, lo, hi, [0, 0, 1]); // north, behind the landing
+  wall(0, 0, 0, 4 * T, lo, hi, [1, 0, 0]); // west
+  wall(3 * T, 0, 3 * T, 4 * T, lo, hi, [-1, 0, 0]); // east
+  wall(T, T, T, 4 * T, lo, hi, [-1, 0, 0]); // the wall between the flights: its two sides and its end
+  wall(2 * T, T, 2 * T, 4 * T, lo, hi, [1, 0, 0]);
+  wall(T, T, 2 * T, T, lo, hi, [0, 0, -1]);
+  // the two ends: a doorway at the foot of the first flight (the hall's) or the head of the second (the twin's)
+  for (const [x0, fh, door] of [[0, 0, hallSide], [2 * T, 6 * d, !hallSide]]) {
+    if (door) { wall(x0, 4 * T, x0 + T, 4 * T, fh + WALL_H, hi, [0, 0, -1]); wall(x0, 4 * T, x0 + T, 4 * T, lo, fh, [0, 0, -1]); }
+    else wall(x0, 4 * T, x0 + T, 4 * T, lo, hi, [0, 0, -1]);
+  }
+  ceil.quad([0, hi, 0], [3 * T, 0, 0], [0, 0, 4 * T], [0, -1, 0], false);
+  // the landing and the two ends
+  const flat = (x0, z0, w, dz, h) => floors.quad([x0, h, z0 + dz], [w, 0, 0], [0, 0, -dz], [0, 1, 0], false);
+  flat(0, 0, 3 * T, T, 3 * d);
+  flat(0, 3 * T, T, T, 0);
+  flat(2 * T, 3 * T, T, T, 6 * d);
+  // the flights: treads and risers, 16 to a flight
+  const flight = (x0, zA, hA, zB, hB) => { // from (zA, hA) to (zB, hB), hB above hA
+    const n = 16, dz = (zB - zA) / n, rise = (hB - hA) / n, nz = -Math.sign(dz);
+    for (let j = 0; j < n; j++) {
+      const z = zA + dz * j, h = hA + rise * j;
+      steps.quad(dz > 0 ? [x0 + T, h, z] : [x0, h, z], dz > 0 ? [-T, 0, 0] : [T, 0, 0], [0, rise, 0], [0, 0, nz], false); // riser
+      steps.quad([x0, h + rise, Math.max(z, z + dz)], [T, 0, 0], [0, 0, -Math.abs(dz)], [0, 1, 0], false); // tread
+    }
+  };
+  const f1 = [[3 * T, 0], [T, 3 * d]], f2 = [[T, 3 * d], [3 * T, 6 * d]]; // (z, height) at each end
+  for (const [x0, [a, b]] of [[0, f1], [2 * T, f2]]) { const [p, q] = a[1] <= b[1] ? [a, b] : [b, a]; flight(x0, p[0], p[1], q[0], q[1]); }
+  const SM = stairMaterials(mats);
+  g.add(P.mesh(walls.build(), SM.wall, false), P.mesh(floors.build(), mats.floors[0], false), P.mesh(steps.build(), mats.darkMetal, false), P.mesh(ceil.build(), mats.ceil, false));
+  // a handrail along the wall between the flights, on each side
+  const railMat = mats.rust ? mats.rust[0] : mats.darkMetal;
+  for (const [x, [a, b]] of [[T - 0.06, f1], [2 * T + 0.06, f2]]) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), rail = P.mesh(new THREE.CylinderGeometry(0.03, 0.03, len, 6), railMat, false);
+    rail.position.set(x, (a[1] + b[1]) / 2 + 0.95, (a[0] + b[0]) / 2);
+    rail.rotation.x = Math.atan2(b[0] - a[0], b[1] - a[1]);
+    g.add(rail);
+  }
+  // a cage lamp over the landing (always on: the two stairwells must look the same)
+  const lamp = P.makeLamp(mats, 'bulb');
+  lamp.position.set(1.5 * T, 3 * d + WALL_H, 0.5 * T);
+  g.add(lamp);
+  group.add(g);
+  g.updateMatrixWorld(true);
+  out.lamps.push({ pos: lamp.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, -0.7, 0)), obj: lamp, state: 'ok', phase: 0, room: -1, on: 1 });
+  // a sign over the door, on the corridor side: which way it goes
+  const up = d > 0 === hallSide, label = hallSide ? name : 'FACTORY FLOOR';
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const q = c.getContext('2d'); q.fillStyle = '#7a1210'; q.fillRect(0, 0, 256, 64); q.fillStyle = '#e8e2d4'; q.font = 'bold 30px "Courier New", monospace'; q.textAlign = 'center'; q.textBaseline = 'middle';
+  q.fillText((up ? '\u25B2 ' : '\u25BC ') + label, 128, 34);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.375), new THREE.MeshBasicMaterial({ map: tex, color: 0x9a9a9a }));
+  // (in the hall, high over the doorway; in a storey's corridor, under a 3 m ceiling, on the wall beside it)
+  if (hallSide) sign.position.set((st.x + 0.5) * TILE, WALL_H + 0.4, (st.y + 5) * TILE + 0.03);
+  else sign.position.set((st.x + 3.5) * TILE, 1.95, (st.y + 5) * TILE + 0.03);
+  group.add(sign);
+}
+
 export function buildLevel(L, mats) {
   const rng = makeRng(L.seed * 7 + 3);
   const { W, H, grid, D } = L;
@@ -476,12 +695,16 @@ export function buildLevel(L, mats) {
   if (CEIL > WALL_H && L.door) low.add(L.door.y * W + L.door.x);
   if (L.low) for (let i = 0; i < W * H; i++) if (L.low[i]) low.add(i);
   const UPPER = 99, HOUSE = 98; // (the panels above the first 3 m: their own surface where the floor has one; machine housings)
-  const stack = (k, p0, r, n) => { k = UPPER; for (let h = WALL_H; h < CEIL - 0.01; h += WALL_H) buf(wallBufs, k).quad([p0[0], h, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, Math.min(WALL_H, CEIL - h), 0], n, (h / WALL_H) % 2 === 1); };
-  const wallBufs = new Map(), floorBufs = new Map(), ceil = new Geo();
+  // B10's storeys each have their own surfaces: every buffer is keyed by storey too (rk * 1000 + kind)
+  let rk = 0;
+  const stack = (k, p0, r, n) => { k = rk * 1000 + UPPER; for (let h = WALL_H; h < CEIL - 0.01; h += WALL_H) buf(wallBufs, k).quad([p0[0], h, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, Math.min(WALL_H, CEIL - h), 0], n, (h / WALL_H) % 2 === 1); };
+  const wallBufs = new Map(), floorBufs = new Map(), ceils = new Map();
   const buf = (map, k) => map.get(k) || map.set(k, new Geo()).get(k);
+  const ceilOf = () => buf(ceils, rk);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x;
-    if (!grid[i] || crawl[i]) continue;
+    if (!grid[i] || crawl[i] || (L.stair && L.stair[i])) continue; // (stairwells: buildStairwell)
+    rk = L.region && L.region[i] !== 255 ? L.region[i] : 0;
     const room = L.rooms[L.roomOf[i]];
     const goreBoost = room && (room.type === 'butcher' || room.type === 'pit') ? 1 : 0;
     const style = room ? (L.roomOf[i] + L.depth) % 3 : L.depth % 3;
@@ -501,15 +724,15 @@ export function buildLevel(L, mats) {
       const p0 = [cx + dx * TILE / 2 - r[0] * TILE / 2, 0, cz + dy * TILE / 2 - r[2] * TILE / 2];
       if (L.house && L.house[nb]) { // a machine housing on the factory floor: steel to 2.6 m, its tunnel's mouth below that
         const hb = L.hallInfo.houseH;
-        if (crawl[nb]) buf(wallBufs, HOUSE).quad([p0[0], CRAWL_H, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, hb - CRAWL_H, 0], n, false);
-        else buf(wallBufs, HOUSE).quad(p0, [r[0] * TILE, 0, r[2] * TILE], [0, hb, 0], n, false);
+        if (crawl[nb]) buf(wallBufs, rk * 1000 + HOUSE).quad([p0[0], CRAWL_H, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, hb - CRAWL_H, 0], n, false);
+        else buf(wallBufs, rk * 1000 + HOUSE).quad(p0, [r[0] * TILE, 0, r[2] * TILE], [0, hb, 0], n, false);
         continue;
       }
       let gore = D.intro ? 0 : rng() < 0.3 + 0.17 * D.gore + goreBoost * 0.2 ? Math.min(3, 1 + Math.floor(rng() * (D.gore + 1 + goreBoost))) : 0;
       const flip = rng() < 0.5;
       // a crouchway's mouth: only the wall above it
-      if (crawl[nb]) buf(wallBufs, gore * 3 + style).quad([p0[0], CRAWL_H, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, WALL_H - CRAWL_H, 0], n, flip);
-      else buf(wallBufs, gore * 3 + style).quad(p0, [r[0] * TILE, 0, r[2] * TILE], [0, WALL_H, 0], n, flip);
+      if (crawl[nb]) buf(wallBufs, rk * 1000 + gore * 3 + style).quad([p0[0], CRAWL_H, p0[2]], [r[0] * TILE, 0, r[2] * TILE], [0, WALL_H - CRAWL_H, 0], n, flip);
+      else buf(wallBufs, rk * 1000 + gore * 3 + style).quad(p0, [r[0] * TILE, 0, r[2] * TILE], [0, WALL_H, 0], n, flip);
       if (!low.has(i)) stack(style, p0, r, n);
     }
     let fk = 0;
@@ -517,11 +740,12 @@ export function buildLevel(L, mats) {
     else if (!D.intro && rng() < 0.06 + D.gore * 0.05 + goreBoost * 0.1) fk = 1;
     else if (L.corridor[i] && rng() < 0.08) fk = 3;
     if (fk) out.bloodTiles[i] = 1;
-    buf(floorBufs, fk).quad([x * TILE, 0, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], rng() < 0.5);
+    buf(floorBufs, rk * 1000 + fk).quad([x * TILE, 0, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], rng() < 0.5);
     const ch = low.has(i) ? WALL_H : CEIL;
-    ceil.quad([x * TILE, ch, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false);
+    ceilOf().quad([x * TILE, ch, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false);
   }
-  if (L.house) for (let i = 0; i < W * H; i++) if (L.house[i]) { const x = i % W, y = (i / W) | 0; buf(wallBufs, HOUSE).quad([x * TILE, L.hallInfo.houseH, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], false); ceil.quad([x * TILE, CEIL, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false); } // their tops, and the roof over them
+  rk = 0;
+  if (L.house) for (let i = 0; i < W * H; i++) if (L.house[i]) { const x = i % W, y = (i / W) | 0; buf(wallBufs, HOUSE).quad([x * TILE, L.hallInfo.houseH, (y + 1) * TILE], [TILE, 0, 0], [0, 0, -TILE], [0, 1, 0], false); ceilOf().quad([x * TILE, CEIL, y * TILE], [TILE, 0, 0], [0, 0, TILE], [0, -1, 0], false); } // their tops, and the roof over them
   // the crouchways themselves: their own rng, so the rest of the floor dresses the same as it always has
   {
     const crng = makeRng(L.seed * 13 + 5), cw = new Geo(), cf = new Geo(), cc = new Geo();
@@ -553,9 +777,11 @@ export function buildLevel(L, mats) {
   }
   // every kind of floor has its own surfaces; the meatworks keeps the originals
   const TM = themeMaterials(mats, L.depth === 0 && L.theme === 'offices' ? 'hiring' : L.hall ? 'plant98' : L.depth === 9 && (L.theme || 'plant') === 'plant' ? 'smokehouse' : L.theme || 'plant'); // (the hiring office: its own surfaces, not Administration's)
-  for (const [k, g] of wallBufs) { const m = P.mesh(g.build(), k === HOUSE ? (TM && TM.upper) || mats.darkMetal : k === UPPER ? (TM && TM.upper) || (TM ? TM.walls[0] : mats.walls[0]) : TM ? TM.walls[Math.floor(k / 3)] : mats.walls[k], false); group.add(m); }
-  for (const [k, g] of floorBufs) { const m = P.mesh(g.build(), TM ? TM.floors[k] : mats.floors[k], false); group.add(m); }
-  group.add(P.mesh(ceil.build(), TM ? TM.ceil : mats.ceil, false));
+  const TMs = [TM, themeMaterials(mats, 'mgmt'), themeMaterials(mats, 'boiler')]; // (B10: the hall, upstairs, below)
+  for (const [key, g] of wallBufs) { const T = TMs[(key / 1000) | 0], k = key % 1000; const m = P.mesh(g.build(), k === HOUSE ? (T && T.upper) || mats.darkMetal : k === UPPER ? (T && T.upper) || (T ? T.walls[0] : mats.walls[0]) : T ? T.walls[Math.floor(k / 3)] : mats.walls[k], false); group.add(m); }
+  for (const [key, g] of floorBufs) { const T = TMs[(key / 1000) | 0], k = key % 1000; const m = P.mesh(g.build(), T ? T.floors[k] : mats.floors[k], false); group.add(m); }
+  for (const [r, g] of ceils) { const T = TMs[r]; group.add(P.mesh(g.build(), T ? T.ceil : mats.ceil, false)); }
+  for (const s of L.stairs || []) { buildStairwell(L, mats, group, out, s.a, true, s.name); buildStairwell(L, mats, group, out, s.b, false, s.name); }
   if (TEX.pbr) dressArchitecture(L, mats, group, L.theme || 'plant'); // the remaster's rails, pipes, beams and frames
   // the drains: dark water over every wet tile
   if (L.water && L.water.some((v) => v)) {

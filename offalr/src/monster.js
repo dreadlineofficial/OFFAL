@@ -2,7 +2,7 @@
 // It hunts by sound and by light, searches where it lost you, and opens lockers.
 import { unlock } from './achievements.js';
 import * as THREE from 'three';
-import { lineOfSight, pathClear, findPathNav, collide, randomFloorNear, inCrawl } from './level.js';
+import { lineOfSight, pathClear, findPathNav, collide, randomFloorNear, inCrawl, groundAt, crossPortal, routeTo, travelDist } from './level.js';
 
 const V = new THREE.Vector3();
 
@@ -130,9 +130,9 @@ export class Hunter {
   hear(n) {
     if (this.state === 'stunned' || (this.w.dev && this.w.dev.ghost)) return;
     if (inCrawl(this.w.L, n.pos.x, n.pos.z)) return; // in a crouchway you're somewhere he can't go: he doesn't care
-    if (this.state === 'chase' && this.pos.distanceTo(n.pos) < n.radius * this.w.D.hearing) { this.lastSeen = n.pos.clone(); this.lastVel = null; this.cast = null; return; } // still hunting: he follows the sound
+    if (this.state === 'chase' && (this.w.L.stairs ? travelDist(this.w.L, this.pos, n.pos) : this.pos.distanceTo(n.pos)) < n.radius * this.w.D.hearing) { this.lastSeen = n.pos.clone(); this.lastVel = null; this.cast = null; return; } // still hunting: he follows the sound
     if (this.state === 'chase' || this.state === 'attack' || this.state === 'recover' || this.state === 'locker' || this.state === 'grab') return;
-    const d = this.pos.distanceTo(n.pos);
+    const d = this.w.L.stairs ? travelDist(this.w.L, this.pos, n.pos) : this.pos.distanceTo(n.pos); // (from another storey: up or down the stairwell)
     const los = lineOfSight(this.w.L, this.pos.x, this.pos.z, n.pos.x, n.pos.z);
     const r = n.radius * this.w.D.hearing * (los ? 1 : 0.6);
     if (d > r) return;
@@ -170,6 +170,7 @@ export class Hunter {
   }
 
   pathTo(target) {
+    target = routeTo(this.w.L, this.pos, target); // (on another storey: the stairs first)
     this.path = findPathNav(this.w.L, this.w.B, this.pos.x, this.pos.z, target.x, target.z);
     this.pathT = 0;
     // the route starts in the cell he's standing in, often a step behind him: don't turn back for it
@@ -434,6 +435,7 @@ export class Hunter {
     this.pos.x += mx * this.speed * dt;
     this.pos.z += mz * this.speed * dt;
     collide(L, w.B, this.pos, 0.34, true);
+    if (L.stairs && crossPortal(L, this.pos)) { this.path = null; this.stuck = { t: 0, x: this.pos.x, z: this.pos.z }; } // up or down a storey
 
     // unstick
     this.stuck.t += dt;
@@ -465,6 +467,7 @@ export class Hunter {
     const jaw = this.state === 'chase' ? 0.35 + Math.sin(t * 9) * 0.25 : this.state === 'attack' ? 0.8 : 0.05;
     poseForeman(this.body, { gait: this.gait, speed: this.speed, mode, t, swing: this.swing, jawOpen: jaw, twitch: this.twitch });
     this.obj.position.copy(this.pos);
+    if (L.stairs) this.obj.position.y = groundAt(L, this.pos.x, this.pos.z);
     this.obj.rotation.y = this.yaw;
 
     // sound: heavy steps, the hook dragging behind it, wet breathing
