@@ -1198,7 +1198,7 @@ export const PARTS = {
 };
 const JUNK = ['Invoices. A dead mouse.', 'Rags and a jar of screws.', 'Time sheets, every one signed in the same hand.', 'A photograph of the line, 1971. Everyone is smiling.', 'Empty.', 'Rubber gloves. Something has dried in the fingers.', 'Fuse wire, a torch with no batteries.', 'A lunch box. Still full.'];
 function toolChest(mats) {
-  const g = new THREE.Group(), red = new THREE.MeshPhongMaterial({ color: 0x6a1410, shininess: 50, specular: 0x333333 });
+  const g = new THREE.Group(), red = new THREE.MeshPhongMaterial({ color: 0x4a1612, shininess: 25, specular: 0x222222 });
   const body = P.mesh(new THREE.BoxGeometry(0.72, 1.0, 0.46), red); body.position.y = 0.5; g.add(body);
   for (let i = 0; i < 5; i++) { const d = P.mesh(new THREE.BoxGeometry(0.66, 0.012, 0.01), mats.darkMetal, false); d.position.set(0, 0.2 + i * 0.17, 0.235); g.add(d); const hd = P.mesh(new THREE.BoxGeometry(0.3, 0.025, 0.03), mats.darkMetal, false); hd.position.set(0, 0.26 + i * 0.17, 0.245); g.add(hd); }
   const lid = P.mesh(new THREE.BoxGeometry(0.74, 0.06, 0.48), mats.darkMetal); lid.position.y = 1.03; g.add(lid);

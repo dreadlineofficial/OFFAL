@@ -1593,8 +1593,8 @@ function updateArea() {
   if (a === G.area) return;
   G.area = a;
   G.areas.forEach((g, i) => (g.visible = i === a));
-  scene.fog.color.setHex([G.info.fog, 0x1c1a16, 0x0d100d][a] ?? G.info.fog); // the hall's grey haze; upstairs, stale smoke; below, damp
-  if (G.officeLight) G.officeLight.intensity = [2.2, 0.9, 0.3][a] ?? 2.2;
+  scene.fog.color.setHex([G.info.fog, 0x24201a, 0x121512][a] ?? G.info.fog); // the hall's grey haze; upstairs, stale smoke; below, damp
+  if (G.officeLight) G.officeLight.intensity = [2.2, 1.5, 0.75][a] ?? 2.2;
 }
 function updateGame(dt, t) {
   if (G.mode === 'hunt') { updateHunt(dt); return; }

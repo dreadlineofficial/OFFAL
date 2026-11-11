@@ -901,9 +901,11 @@ function boilerWallCanvas(gore) {
     g.fillStyle = y < band ? 'rgba(80,76,64,.4)' : 'rgba(8,16,10,.5)'; g.fillRect(0, y, W, 2);
     for (let x = -off; x < W; x += 64) g.fillRect(x, y, 2, 24);
   }
-  for (let i = 0; i < 26; i++) { // limewash flaked off to the brick
-    const x = rng() * W, y = rng() * band, r = 4 + rng() * 18;
-    g.fillStyle = `rgba(${110 + rng() * 30 | 0},${52 + rng() * 14 | 0},${36 + rng() * 10 | 0},.75)`; g.beginPath(); g.ellipse(x, y, r, r * (0.4 + rng() * 0.5), rng() * 3, 0, TAU); g.fill();
+  for (let i = 0; i < 9; i++) { // limewash flaked off to the brick: ragged, along the courses
+    const x = rng() * W, y = ((rng() * band / 24) | 0) * 24 + 2, n = 5 + ((rng() * 5) | 0);
+    g.fillStyle = `rgba(${86 + rng() * 16 | 0},${58 + rng() * 10 | 0},${46 + rng() * 8 | 0},.6)`; g.beginPath();
+    for (let k = 0; k < n; k++) { const a = (k / n) * TAU, r = 6 + rng() * 14; g.lineTo(x + Math.cos(a) * r * 1.8, y + 10 + Math.sin(a) * r * 0.6); }
+    g.fill();
   }
   g.fillStyle = '#16241a'; g.fillRect(0, band - 3, W, 6);
   streaks(g, W, H, 22, '50,40,20', 0.4, rng, true); // rust and damp running down

@@ -79,6 +79,22 @@ node tools/regress-offalr.mjs             # regression, needs the dev server; mu
 
 ## Current state (Nov 2026, v1.0.0)
 Done recently:
+- B10 v5 (Nov 2026, owner: "proper floors" = storeys like Granny's house, "mix" puzzles): **storeys** — offices upstairs
+  (`mgmt` theme: oak panelling, nicotine wallpaper, carpet) and a boiler room below (`boiler` theme: green/limewash brick,
+  wet concrete), laid out east of the hall (x >= `STOREY_X` = 64, `D.width` 92; level.js `storeys`). Each is reached by
+  a stairwell in the hall's north strip; a stairwell (3x4 tiles: flight, wall, flight; landing row 0) and its twin in the
+  other storey are one shaft drawn twice 6 m apart (`buildStairwell`), and `crossPortal` moves you/the Foreman between
+  them on the landing (seamless). Stair heights: `L.gh0/gh1` + `groundAt` (camera and Foreman mesh only; logic stays
+  flat). `L.region` (0 hall, 1 up, 2 down); `routeTo`/`travelDist` make him path/hear via the stairs; `crossed()` sends
+  a chasing Foreman after you. main.js `G.areas`: static meshes grouped per storey, only yours drawn; per-storey fog
+  colour/fill (`updateArea`), lamps from other storeys skipped. findWing ignores stairwell doors and follows the links.
+  Hall: zones vary in size (`colsZ/rowsZ/aisleX/aisleY` in hallInfo), two merged across an aisle; each zone a job
+  (pool in config) with its own floor (`sectionFloors`: grating, quarry tile, straw, diamond plate), machines (scald
+  tanks, splitting stands, press, hopper), clutter mix and a hanging sign. Granny-style **parts** (puzzles.js `Parts`):
+  handwheel/isolator key/desk key/bolt cutters in tool chests (hall, below) and filing cabinets (up); one in hand
+  (hotbar), picking another drops yours (noise); `Puzzles.need` makes valves/breakers/override/`Chained` (lift lever
+  chained) wait for their part. Chain: parts, fuses, chained, keypad, breakers, valves, hooks, override. Snapshot `b10: 5`.
+- Smoke Break film: corner shot fingers closed round the lighter (`fist`), wrist turned (they fanned up past his face).
 - GameJolt demo: `node tools/build-offalr.mjs --demo` → `dist/offalr-demo.html` (sets `OFFAL_DEMO`; `?demo=1` on the
   dev server). config.js `DEMO`/`DEMO_LAST = 3`: hiring office + B1–B3, then `demoEnd` (main.js) shows the ending card
   with "END OF DEMO"; no Overtime, no dev mode, floor pick only up to B3, own save key `offalr-demo-save-v1`.
