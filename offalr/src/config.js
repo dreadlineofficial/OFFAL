@@ -35,7 +35,7 @@ const STORY = [
     size: 40, rooms: 12, tags: 4, hunters: 1, puzzles: ['drawers'] },
   { name: 'THE DRAINS', quote: 'Everything that ran off the kill floor ended up down here. So did some of the people.', lamp: 0xe8e0b0, fog: 0x040504, theme: 'sewer',
     size: 44, rooms: 14, tags: 5, hunters: 1, puzzles: ['sluices'] },
-  { name: 'EVISCERATION', quote: 'Everything that is inside comes out here. Now there are two of him.', lamp: 0xff8070, fog: 0x070000,
+  { name: 'EVISCERATION', quote: 'Everything that is inside comes out here. He has started listening for you.', lamp: 0xff8070, fog: 0x070000,
     size: 46, rooms: 14, tags: 5, hunters: 2, puzzles: ['fuses', 'keypad'] },
   { name: 'ADMINISTRATION', quote: 'Somebody up here signed off on all of it. Every quarter. In triplicate.', lamp: 0xfff0c8, fog: 0x050402, theme: 'offices',
     size: 48, rooms: 15, tags: 5, hunters: 2, puzzles: ['keycard'] },
@@ -100,7 +100,9 @@ export function difficulty(depth, mode = 'story', rng = Math.random, diffKey = '
   const df = DIFFS[diffKey] || DIFFS.normal;
   const ramp = Math.min(1, d / (STORY_FLOORS - 1));
   const chaseRatio = df.chase[0] + (df.chase[1] - df.chase[0]) * ramp;
-  const pace = { chaseSpeed: RUN_SPEED * chaseRatio, speedMul: chaseRatio / 0.92, diff: diffKey, windup: df.windup, reach: df.reach, recover: df.recover, alert: df.alert, breathDrain: df.breathDrain, stun: df.stun };
+  // how cunning he is: from B5 he learns (doubles back, stalks quietly, waits for you), and on B10 he's at his worst
+  const ai = mode === 'story' ? (depth >= 10 ? 3 : depth >= 8 ? 2 : depth >= 5 ? 1 : 0) : Math.min(3, Math.floor(depth / 4));
+  const pace = { ai, chaseSpeed: RUN_SPEED * chaseRatio * (ai >= 3 ? 1.03 : 1), speedMul: chaseRatio / 0.92, diff: diffKey, windup: df.windup, reach: df.reach, recover: df.recover, alert: df.alert, breathDrain: df.breathDrain, stun: df.stun };
   const base = {
     hearing: (1 + d * 0.06) * df.hear,
     adrenaline: d < 2 ? 1 : 2,

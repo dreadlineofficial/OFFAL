@@ -134,17 +134,25 @@ export class Hunter {
     if (this.state === 'chase' || this.state === 'attack' || this.state === 'recover' || this.state === 'locker' || this.state === 'grab') return;
     const d = this.w.L.stairs ? travelDist(this.w.L, this.pos, n.pos) : this.pos.distanceTo(n.pos); // (from another storey: up or down the stairwell)
     const los = lineOfSight(this.w.L, this.pos.x, this.pos.z, n.pos.x, n.pos.z);
-    const r = n.radius * this.w.D.hearing * (los ? 1 : 0.6);
+    const ai = this.w.D.ai || 0;
+    const r = n.radius * this.w.D.hearing * (1.25 + ai * 0.08) * (los ? 1 : 0.75);
     if (d > r) return;
     this.target = n.pos.clone();
     this.lastSeen = n.pos.clone();
+    // already on his way to a sound, or looking about: he just turns for the new one and keeps coming, no pause
+    if (this.state === 'investigate' || this.state === 'listen' || this.state === 'search' || this.state === 'stalk') {
+      this.awareness = Math.max(this.awareness, n.loud ? 0.7 : 0.4);
+      if (n.rush) this.rushT = 9;
+      this.setState('investigate');
+      return;
+    }
     if (this.state === 'patrol') this.w.audio.sniff(this.pos);
     this.awareness = Math.max(this.awareness, n.loud && d < r * 0.4 ? 0.7 : 0.3);
     // he stops dead and turns toward it for a few seconds before he goes to look (less long the harder it is, and the closer and louder it was)
     if (n.rush) this.rushT = 9;
     if (this.state !== 'heard' && this.state !== 'alert') {
       this.setState('heard');
-      this.heardFor = n.rush ? 0.35 : (1.2 + this.w.D.alert * 1.6) * (this.awareness >= 0.7 ? 0.55 : 1) * (0.85 + Math.random() * 0.3);
+      this.heardFor = n.rush ? 0.3 : (0.7 + this.w.D.alert * 1.0) * (ai >= 3 ? 0.6 : 1) * (this.awareness >= 0.7 ? 0.55 : 1) * (0.85 + Math.random() * 0.3);
     } else if (n.rush && this.state === 'heard') this.heardFor = Math.min(this.heardFor, this.stateT + 0.35);
   }
 
@@ -153,19 +161,20 @@ export class Hunter {
     if (this.w.dev && this.w.dev.ghost) return false; // dev mode: you're not there
     if (pl.hidden || pl.inLift && this.w.liftSealed || pl.inCrawl || this.state === 'stunned') return false;
     const dx = pl.pos.x - this.pos.x, dz = pl.pos.z - this.pos.z, d = Math.hypot(dx, dz);
-    if (d > 26) return false;
+    const ai = this.w.D.ai || 0, far = ai >= 3 ? 1.25 : 1 + ai * 0.05; // B10: he sees a good deal further
+    if (d > 30 * far) return false;
     if (!lineOfSight(this.w.L, this.pos.x, this.pos.z, pl.pos.x, pl.pos.z)) return false;
-    if (d < 2.2) return true;
-    if (pl.crouch && !pl.lightOn) return d < 2.6; // crouched, torch off: only right up close
+    if (d < 2.4) return true;
+    if (pl.crouch && !pl.lightOn) return d < 3 + ai * 0.25; // crouched, torch off: only fairly close
     const facing = (Math.sin(this.yaw) * dx + Math.cos(this.yaw) * dz) / d;
     // the torch in its eyes gives you away from anywhere
-    const lookAt = pl.lightOn && pl.facingDot(this.pos, 1.9) > 0.94 && d < 16;
+    const lookAt = pl.lightOn && pl.facingDot(this.pos, 1.9) > 0.94 && d < 20 * far;
     if (lookAt) return true;
     let vis = pl.lightOn ? 1 : 0.38;
     if (pl.crouch) vis *= 0.65;
     if (pl.lit) vis = Math.max(vis, 0.75);
-    const range = 3 + 15 * vis;
-    const cone = this.state === 'chase' ? -0.2 : 0.45;
+    const range = (4 + 17 * vis) * far;
+    const cone = this.state === 'chase' ? -0.3 : ai >= 2 ? 0.25 : 0.35;
     return facing > cone && d < range;
   }
 
@@ -191,6 +200,15 @@ export class Hunter {
   pickPatrol() {
     const L = this.w.L, pl = this.w.player, others = this.w.hunters.filter((h) => h !== this);
     let t = null;
+    const ai = this.w.D.ai || 0;
+    // B5 and down: he comes back to where he last lost you, a while later, to see if you're still there
+    if (this.hunch && ai >= 1 && Math.random() < 0.6) { t = randomFloorNear(L, this.hunch.x, this.hunch.z, 2); this.hunch = null; }
+    // B8 and down: now and then he goes quiet and comes looking for you, no footsteps, no breath
+    if (!t && ai >= 2 && !this.avoidT && this.sinceContact > 25 && (this.stalkCD || 0) <= 0 && pl.pos.distanceTo(this.pos) < 40 && Math.random() < (ai >= 3 ? 0.55 : 0.35)) {
+      this.stalkCD = ai >= 3 ? 30 : 50;
+      this.setState('stalk');
+      return;
+    }
     // the other one is chasing you: this one comes round the far side of you to cut you off
     const chaser = others.find((h) => h.state === 'chase');
     if (!this.avoidT && chaser && Math.random() < 0.6) {
@@ -199,7 +217,7 @@ export class Hunter {
     }
     // it drifts back toward you eventually, but only one of them at a time: the one nearer you
     const nearest = others.every((h) => h.pos.distanceTo(pl.pos) >= this.pos.distanceTo(pl.pos));
-    if (!t && !this.avoidT && nearest && (this.sinceContact > 35 || Math.random() < 0.3)) t = randomFloorNear(L, pl.pos.x, pl.pos.z, 5);
+    if (!t && !this.avoidT && nearest && (this.sinceContact > 35 - ai * 6 || Math.random() < 0.3 + ai * 0.08)) t = randomFloorNear(L, pl.pos.x, pl.pos.z, 5);
     if (!t && this.avoidT) {
       // just lost you down a crouchway: somewhere well away from it
       const far = L.rooms.slice(1).map((r) => [Math.hypot(r.cx * 2 + 1 - pl.pos.x, r.cy * 2 + 1 - pl.pos.z), r]).sort((a, b) => b[0] - a[0]);
@@ -225,11 +243,13 @@ export class Hunter {
     this.pathT += dt;
     this.sinceContact += dt;
     this.rushT = Math.max(0, (this.rushT || 0) - dt);
+    this.stalkCD = (this.stalkCD || 0) - dt;
+    const ai = w.D.ai || 0;
     const toP = V.set(pl.pos.x - this.pos.x, 0, pl.pos.z - this.pos.z);
     const dP = toP.length();
 
     // you went where he can't follow: he gives up and goes off somewhere else
-    if (pl.inCrawl && ['chase', 'attack', 'recover', 'alert', 'heard', 'investigate', 'listen', 'search', 'locker'].includes(this.state)) {
+    if (pl.inCrawl && ['chase', 'attack', 'recover', 'alert', 'heard', 'investigate', 'listen', 'search', 'locker', 'stalk'].includes(this.state)) {
       if (['chase', 'attack', 'recover'].includes(this.state)) { w.audio.growl(this.pos, 1); unlock('crawl'); }
       this.awareness = 0;
       this.lastSeen = null;
@@ -260,7 +280,7 @@ export class Hunter {
       w.audio.stinger();
       w.audio.roar(this.pos);
       w.onSpotted(this);
-    } else if (sees && this.state === 'patrol' && this.awareness > 0.3) {
+    } else if (sees && (this.state === 'patrol' || this.state === 'stalk') && this.awareness > 0.3) {
       this.target = pl.pos.clone();
       this.setState('alert');
       w.audio.sniff(this.pos);
@@ -270,8 +290,14 @@ export class Hunter {
     const D = w.D;
     switch (this.state) {
       case 'patrol':
-        speed = 1.25 * D.speedMul;
+        speed = 1.25 * D.speedMul * (1 + ai * 0.06);
         if (!this.path || !this.path.length || this.pathT > 25) this.pickPatrol();
+        break;
+      case 'stalk': // creeping after you, silent: re-aims at where you are every couple of seconds
+        speed = 1.55 * D.speedMul;
+        turn = 2.5;
+        if (!this.path || this.pathT > 2.2) this.pathTo(pl.pos);
+        if (this.stateT > 16 || dP < 3 || (this.path && !this.path.length)) { this.setState('listen'); this.lookBase = this.yaw; this.listenFor = 4 + Math.random() * 3; }
         break;
       case 'alert': // stops dead, head twitching toward you
         speed = 0;
@@ -286,7 +312,7 @@ export class Hunter {
         if (this.stateT > this.heardFor) this.setState('investigate');
         break;
       case 'investigate': // going to a noise: half his running speed (flat out, when it was you sprinting)
-        speed = D.chaseSpeed * (this.rushT > 0 ? 0.95 : 0.5);
+        speed = D.chaseSpeed * (this.rushT > 0 ? 0.95 : 0.6 + ai * 0.08);
         if (!this.path || this.pathT > 2) this.pathTo(this.target);
         if (this.pos.distanceTo(this.target) < 1.2 || (this.path && !this.path.length)) {
           this.setState('listen');
@@ -305,13 +331,18 @@ export class Hunter {
       }
       case 'search':
         speed = 1.7 * D.speedMul;
-        if (this.stateT > 14) { this.setState('patrol'); this.awareness = 0; this.checked.clear(); break; }
+        if (this.stateT > 14 + ai * 3) {
+          if (ai >= 1 && this.lastSeen) this.hunch = this.lastSeen.clone(); // he'll be back
+          // B8 and down: he doesn't leave. He stands in the dark where he lost you and waits
+          if (ai >= 2 && !this.waited && Math.random() < 0.5) { this.waited = true; this.setState('listen'); this.lookBase = this.yaw; this.listenFor = 7 + Math.random() * 5; break; }
+          this.waited = false; this.setState('patrol'); this.awareness = 0; this.checked.clear(); break;
+        }
         if (!this.path || !this.path.length) {
           // check a locker near where it lost you
           const near = w.B.lockers.filter((lk) => !this.checked.has(lk) && lk.pos.distanceTo(this.lastSeen || this.pos) < 7);
           // and the ones you keep using, he gets to know: a locker you've hidden in twice is the first he opens
           const known = near.filter((lk) => lk.uses >= 2), pick = known.length ? known : near;
-          if (near.length && Math.random() < (known.length ? 0.75 : 0.4)) { this.lockerTarget = pick[(Math.random() * pick.length) | 0]; this.setState('locker'); break; }
+          if (near.length && Math.random() < (known.length ? 0.75 : 0.4) + ai * 0.1) { this.lockerTarget = pick[(Math.random() * pick.length) | 0]; this.setState('locker'); break; }
           const c = this.lastSeen || this.pos;
           const tgt = randomFloorNear(L, c.x, c.z, 3);
           if (tgt) this.pathTo(tgt);
@@ -331,10 +362,10 @@ export class Hunter {
         if (!sees) {
           this.lostT += dt;
           // fifteen seconds without a sight of you and he gives it up
-          if (this.lostT > 15) { this.awareness = 0.4; w.audio.growl(this.pos, 0.8); this.setState('search'); break; }
+          if (this.lostT > 15 + ai * 3) { this.awareness = 0.4; w.audio.growl(this.pos, 0.8); this.setState('search'); break; }
         }
         let tgt = this.lastSeen || pl.pos;
-        if (!sees && this.lastVel) tgt = tgt.clone().addScaledVector(this.lastVel, Math.min(this.lostT, 1.2));
+        if (!sees && this.lastVel) tgt = tgt.clone().addScaledVector(this.lastVel, Math.min(this.lostT, 1.2 + ai * 0.35));
         // got to where you were and you're not there: cast about nearby, still running
         if (!sees && this.pos.distanceTo(tgt) < 1.2) {
           if (!this.cast || this.pos.distanceTo(this.cast) < 1) this.cast = randomFloorNear(L, tgt.x, tgt.z, 3);
@@ -360,7 +391,7 @@ export class Hunter {
         break;
       case 'recover': // a beat to let you run (none at all on extreme)
         speed = 0;
-        if (this.stateT > D.recover) this.setState('chase');
+        if (this.stateT > D.recover * (ai >= 3 ? 0.5 : 1)) this.setState('chase');
         break;
       case 'locker': {
         const lk = this.lockerTarget;
@@ -463,7 +494,7 @@ export class Hunter {
       this.twitchT = this.state === 'chase' ? 0.15 + Math.random() * 0.3 : 0.4 + Math.random() * 2.5;
       if (big && this.state !== 'chase' && dP < 14) w.audio.click(this.pos);
     }
-    const mode = this.state === 'chase' ? 'chase' : this.state === 'attack' ? 'attack' : this.state === 'grab' ? 'grab' : this.state === 'stunned' ? 'stunned' : this.state === 'investigate' ? 'stalk' : 'walk';
+    const mode = this.state === 'chase' ? 'chase' : this.state === 'attack' ? 'attack' : this.state === 'grab' ? 'grab' : this.state === 'stunned' ? 'stunned' : this.state === 'investigate' || this.state === 'stalk' ? 'stalk' : 'walk';
     const jaw = this.state === 'chase' ? 0.35 + Math.sin(t * 9) * 0.25 : this.state === 'attack' ? 0.8 : 0.05;
     poseForeman(this.body, { gait: this.gait, speed: this.speed, mode, t, swing: this.swing, jawOpen: jaw, twitch: this.twitch });
     this.obj.position.copy(this.pos);
@@ -473,18 +504,18 @@ export class Hunter {
     // sound: heavy steps, the hook dragging behind it, wet breathing
     this.stepAcc += this.speed * dt;
     const stride = this.state === 'chase' ? 1.1 : 0.85;
-    if (this.stepAcc > stride) { this.stepAcc = 0; w.audio.thud(this.pos, this.state === 'chase' ? 1 : 0.6); }
+    if (this.stepAcc > stride) { this.stepAcc = 0; if (this.state !== 'stalk') w.audio.thud(this.pos, this.state === 'chase' ? 1 : 0.6); }
     const occluded = !lineOfSight(L, this.pos.x, this.pos.z, pl.pos.x, pl.pos.z);
     this.voice.update(this.pos, {
-      scrape: this.state === 'chase' ? 0 : Math.min(1, this.speed / 1.2) * (0.5 + Math.random() * 0.5),
-      breath: this.state === 'chase' ? 1 : 0.55,
+      scrape: this.state === 'chase' || this.state === 'stalk' ? 0 : Math.min(1, this.speed / 1.2) * (0.5 + Math.random() * 0.5),
+      breath: this.state === 'chase' ? 1 : this.state === 'stalk' ? 0.12 : 0.55,
       growl: this.state === 'chase' ? 0.8 : this.state === 'gate' ? 0.6 : 0,
       occluded,
     });
     this.growlT -= dt;
     if (this.growlT < 0) {
       this.growlT = 5 + Math.random() * 9;
-      if (this.state !== 'chase' && dP < 20) w.audio.growl(this.pos, 0.6);
+      if (this.state !== 'chase' && this.state !== 'stalk' && dP < 20) w.audio.growl(this.pos, 0.6);
     }
   }
 }

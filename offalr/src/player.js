@@ -174,7 +174,7 @@ export class Player {
       if (this.sinceRun > 0.6) this.stamina = Math.min(100, this.stamina + dt * (moving ? 12 : 20) * (w.D.theme === 'freezer' ? 0.6 : 1)); // the cold takes your breath
       if (this.stamina > 25) this.exhausted = false;
     }
-    let speed = running ? (this.boostT > 0 ? 5.7 : 5.1) : crouching ? 1.35 : 2.6;
+    let speed = running ? (this.boostT > 0 ? 5.7 : 5.1) : crouching ? 1.28 : 2.73; // (walk 5% quicker, crouch 5% slower than at launch)
     if (this.foreman) speed = running ? w.D.chaseSpeed : 1.9; // the Foreman's own pace: his chase when you run, his patrol walk
     if (w.slowT > 0) speed *= 0.5;
     // wading: the drains are knee deep until the sluices are open

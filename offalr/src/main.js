@@ -10,7 +10,8 @@ import { fuseBodies, setSculptDetail } from './sculpt.js';
 import { TorchHand, torchCookie } from './viewmodel.js';
 import { Motes } from './motes.js';
 import { detectTier, resolveGfx, applyGfx, renderScale, DynRes, PRESETS, OPTS, LOAD_TIME } from './gfx.js';
-import { makeLayout, buildLevel, lineOfSight, toTile, findPath, collide, regionAt, crossPortal, STOREY_X } from './level.js';
+import { makeLayout, buildLevel, lineOfSight, toTile, findPath, collide, regionAt, crossPortal, STOREY_X, groundAt } from './level.js';
+import { dropMesh } from './drops.js';
 import { Puzzles, PARTS } from './puzzles.js';
 import { Survivor } from './survivor.js';
 import { Cinema, SHOTS } from './cinema.js';
@@ -138,7 +139,7 @@ const G = {
   },
   // sprinting: he hears it wherever he is, seven times in ten, and comes running to where it was
   sprinting(pos) {
-    if (Math.random() < 0.3) return;
+    if (Math.random() < [0.3, 0.25, 0.15, 0][G.D.ai || 0]) return;
     for (const h of G.hunters) h.hear({ pos: pos.clone(), radius: 9999, loud: true, rush: true });
   },
   say(text, secs) { UI.message(text, secs); },
@@ -359,6 +360,7 @@ function loadFloor(depth, seed) {
   const B = buildLevel(L, mats);
   Object.assign(G, { L, B, D, depth, info: floorInfo(depth, G.mode), chased: false, closeCall: false, floorTime: 0, lampKill: 0, torchKill: 0, frenzy: false, frenzyT: 0 });
   G.puzzles = new Puzzles(G, D.puzzles, seed + 17);
+  G.drops = []; G.sel = 0;
   placeLoot(depth, seed);
   scene.add(B.group);
   // each kind of floor brings its own light and colour (overtime picks kinds at random)
@@ -377,7 +379,7 @@ function loadFloor(depth, seed) {
   // playing the Foreman: you see what he sees, in red, a good way off
   if (G.mode === 'hunt') scene.fog.density = 0.035;
   for (const l of lampLights) l.color.setHex(G.info.lamp);
-  G.hunters = B.hunterSpawns.slice(0, D.hunters).map((p, i) => { const h = new Hunter(G, mats, p, i); scene.add(h.obj); return h; });
+  G.hunters = B.hunterSpawns.slice(0, Math.min(1, D.hunters)).map((p, i) => { const h = new Hunter(G, mats, p, i); scene.add(h.obj); return h; });
   G.flies = B.corpses.map((c) => audio.flies(c.pos));
   // a locker or two has someone in it already, on some floors
   if (!D.intro && B.lockers.length > 2) { const n = B.lockers.length > 6 && Math.random() < 0.5 ? 2 : 1; const pick = B.lockers.slice().sort(() => Math.random() - 0.5).slice(0, n); if (depth % 3 === 2) for (const lk of pick) lk.filled = true; } // (only every third floor: B2, B5, B8, B11)
@@ -990,7 +992,8 @@ function refreshMenu() {
 // ---------- saving the exact moment ----------
 // Everything that isn't rebuilt from the floor's seed: where you are and what you've done, what each
 // puzzle is up to, where they are, the clocks. Written every few seconds, on pause, and as the window goes.
-function snapshot() {
+function snapshot() { return withDropsHeld(snapshot0); }
+function snapshot0() {
   if (!G.B || G.mode === 'hunt' || !['play', 'paused'].includes(G.state) || ['closing', 'sealed'].includes(G.lift.phase)) return null;
   const B = G.B;
   return {
@@ -1096,6 +1099,7 @@ function findInteract() {
     consider({ type: 'locker', lk }, lk.pos, Math.hypot(fx - player.pos.x, fz - player.pos.z), 0.95, 0.4);
   }
   for (const p of G.puzzles.interactables()) consider({ type: 'puzzle', p }, p.pos, Math.hypot(p.pos.x - player.pos.x, p.pos.z - player.pos.z), p.range, p.minFacing, 0.3);
+  for (const d of G.drops || []) consider({ type: 'drop', d }, d.pos, Math.hypot(d.pos.x - player.pos.x, d.pos.z - player.pos.z), 1.5, 0.5, 0.4);
   return best;
 }
 
@@ -1167,8 +1171,13 @@ function handleInteract(dt) {
       if (c.progress >= 1) harvest(c);
       break;
     }
+    case 'drop': {
+      const c = carried(), swap = c.length >= UI.SLOTS && !c.some((x) => x.id === it.d.id);
+      UI.prompt(`<kbd>E</kbd>&nbsp; ${swap ? 'SWAP FOR' : 'PICK UP'} THE ${it.d.name}`);
+      if (tapE) pickUpDrop(it.d);
+      break;
+    }
     case 'adrenaline':
-      if (!hasRoom('syringe')) { UI.prompt(FULL); break; }
       UI.prompt('<kbd>E</kbd>&nbsp; TAKE THE SYRINGE');
       if (tapE) {
         it.p.taken = true;
@@ -1179,7 +1188,6 @@ function handleInteract(dt) {
       }
       break;
     case 'gun':
-      if (!hasRoom('gun')) { UI.prompt(FULL); break; }
       UI.prompt('<kbd>E</kbd>&nbsp; TAKE THE BOLT GUN');
       if (tapE) {
         it.p.taken = true;
@@ -1388,7 +1396,7 @@ function harvest(c) {
   G.runTags++;
   ach('firsttag');
   if (G.runTags === 1) director.queue('face', 6 + Math.random() * 5);
-  const got = G.B.lift.inserted + player.tags;
+  const got = G.B.lift.inserted + player.tags + (G.drops || []).reduce((a, d) => a + (d.k === 'tag' ? d.data.n : 0), 0);
   if (got >= G.D.tags) {
     // the last one: and now he knows exactly where you are
     UI.message(G.depth <= 1 ? 'Pulled out a tag. That’s all of them. Get back to the lift.' : 'Pulled out a tag.', 3);
@@ -1622,6 +1630,7 @@ function updateGame(dt, t) {
   if (G.state !== 'play') return;
   autoPickup();
   handleInteract(dt);
+  overflow();
   G.puzzles.update(dt);
   guide.update(dt);
   director.update(dt);
@@ -1688,7 +1697,7 @@ function updateGame(dt, t) {
   gun.update(dt, player);
   UI.hud({
     floor: `${G.info.label} · ${G.info.name}`, battery: player.battery,
-    breath: player.breath, hidden: !!player.hidden, breathUrgent: player.breathUrgent, items: carried(),
+    breath: player.breath, hidden: !!player.hidden, breathUrgent: player.breathUrgent, items: Object.assign(carried(), { sel: G.sel }),
   });
 }
 
@@ -1935,19 +1944,18 @@ setInterval(osdTick, 250);
 // ---------- inventory and the bolt gun ----------
 // what's in the five boxes along the bottom: one kind of thing to a box, as many of it as you like. Each kind keeps
 // the box it first went into until you've none of it left.
-const FULL = 'YOUR HANDS ARE FULL \u00B7 FIVE THINGS AT A TIME';
 function carried() {
   const out = [], inv = G.inv;
-  if (player.tags) out.push({ id: 'tag', name: 'TAGS', n: player.tags });
-  if (player.adrenaline) out.push({ id: 'syringe', name: 'SYRINGE', n: player.adrenaline, key: 'R' });
-  if (inv.built) out.push({ id: 'gun', name: 'BOLT GUN', sub: `${inv.ammo}/${AMMO_MAX} BOLTS`, key: 'LMB' });
+  if (player.tags) out.push({ id: 'tag', k: 'tag', name: 'TAGS', n: player.tags });
+  if (player.adrenaline) out.push({ id: 'syringe', k: 'syringe', name: 'SYRINGE', n: player.adrenaline, key: 'R' });
+  if (inv.built) out.push({ id: 'gun', k: 'gun', name: 'BOLT GUN', sub: `${inv.ammo}/${AMMO_MAX} BOLTS`, key: 'LMB' });
   for (const p of G.puzzles ? G.puzzles.list : []) {
-    if (p.kind === 'fuses' && p.carry) out.push({ id: 'fuse', name: 'FUSES', n: p.carry });
-    if (p.kind === 'scale' && p.carry.length) out.push({ id: 'meat', name: 'MEAT', n: p.carry.length, sub: p.carry.map((c) => c.w).join('+') + ' KG' });
-    if (p.kind === 'keycard' && p.found) out.push({ id: 'card', name: 'KEYCARD' });
-    if (p.kind === 'meatkey' && p.found) out.push({ id: 'key', name: 'CAGE KEY' });
-    if (p.kind === 'parts' && p.hand) out.push({ id: { wheel: 'wheel', cutters: 'cutters' }[p.hand.id] || 'key', name: PARTS[p.hand.id].name }); // (B10: one thing in your hands)
-    if (p.kind === 'hooks' && p.carry && !p.done) out.push({ id: 'crank', name: 'CRANK HANDLE' });
+    if (p.kind === 'fuses' && p.carry) out.push({ id: 'fuse', k: 'fuse', name: 'FUSES', n: p.carry });
+    if (p.kind === 'scale' && p.carry.length) out.push({ id: 'meat', k: 'meat', name: 'MEAT', n: p.carry.length, sub: p.carry.map((c) => c.w).join('+') + ' KG' });
+    if (p.kind === 'keycard' && p.found) out.push({ id: 'card', k: 'card', name: 'KEYCARD' });
+    if (p.kind === 'meatkey' && p.found) out.push({ id: 'key', k: 'cage', name: 'CAGE KEY' });
+    if (p.kind === 'parts' && p.hand) out.push({ id: { wheel: 'wheel', cutters: 'cutters' }[p.hand.id] || 'key', k: 'part', name: PARTS[p.hand.id].name }); // (B10: one thing in your hands)
+    if (p.kind === 'hooks' && p.carry && !p.done) out.push({ id: 'crank', k: 'crank', name: 'CRANK HANDLE' });
   }
   const ids = out.map((it) => it.id);
   G.slotOrder = (G.slotOrder || []).filter((id) => ids.includes(id));
@@ -1955,7 +1963,70 @@ function carried() {
   return G.slotOrder.map((id) => out.find((it) => it.id === id));
 }
 // room for one more of this kind: it stacks on its own box, or there's an empty one
-function hasRoom(id) { const c = carried(); return c.some((it) => it.id === id) || c.length < UI.SLOTS; }
+
+// ---------- two hands, two boxes: put something down (G), pick it up again ----------
+// Anything you carry can go on the floor where you stand and stay there. Picking up a third thing puts down the one
+// in the box you've got selected (1 / 2), Granny-style, with a clatter he can hear.
+const PZ = (kind) => G.puzzles && G.puzzles.get(kind);
+const HELD = {
+  tag: { cap: () => ({ n: player.tags }), give: (d) => { player.tags += d.n; }, take: (d) => { player.tags -= d.n; } },
+  syringe: { cap: () => ({ n: player.adrenaline }), give: (d) => { player.adrenaline += d.n; }, take: (d) => { player.adrenaline -= d.n; } },
+  gun: { cap: () => ({}), give: () => { G.inv.built = true; }, take: () => { G.inv.built = false; } },
+  fuse: { cap: () => ({ n: PZ('fuses').carry }), give: (d) => { PZ('fuses').carry += d.n; }, take: (d) => { PZ('fuses').carry -= d.n; } },
+  meat: { cap: () => ({ cuts: PZ('scale').carry.slice() }), give: (d) => { PZ('scale').carry.push(...d.cuts); }, take: (d) => { const p = PZ('scale'); p.carry = p.carry.filter((c) => !d.cuts.includes(c)); } },
+  card: { cap: () => ({}), give: () => { PZ('keycard').found = true; }, take: () => { PZ('keycard').found = false; } },
+  cage: { cap: () => ({}), give: () => { PZ('meatkey').found = true; }, take: () => { PZ('meatkey').found = false; } },
+  crank: { cap: () => ({}), give: () => { PZ('hooks').carry = true; }, take: () => { PZ('hooks').carry = false; } },
+};
+G.sel = 0;
+function dropSpot() {
+  const d = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).multiplyScalar(0.45).add(player.pos);
+  d.y = G.L.stairs ? groundAt(G.L, d.x, d.z) : 0;
+  return d;
+}
+function putDown(it, quiet) {
+  if (!it || !G.B) return;
+  const at = dropSpot();
+  if (it.k === 'part') { const pp = PZ('parts'); if (!pp || !pp.hand) return; pp.place(pp.hand, at); pp.hand = null; }
+  else {
+    const h = HELD[it.k], data = h.cap();
+    h.take(data);
+    const mesh = dropMesh(it.id, mats);
+    mesh.position.set(at.x, at.y, at.z);
+    mesh.rotation.y = player.yaw + 0.6;
+    G.B.group.add(mesh);
+    G.drops.push({ k: it.k, id: it.id, name: it.name, data, pos: at, mesh });
+  }
+  audio.clank(at, quiet ? 0.3 : 0.7);
+  if (!quiet) G.noise(at, 9, false, 'other');
+  UI.message(`Put down the ${it.name.toLowerCase()}.`, 1.6);
+}
+function pickUpDrop(d) {
+  HELD[d.k].give(d.data);
+  G.B.group.remove(d.mesh);
+  G.drops.splice(G.drops.indexOf(d), 1);
+  audio.pickup();
+}
+// a third thing in your hands: the selected one goes down, and the new one takes its box
+function overflow() {
+  const c = carried();
+  if (c.length <= UI.SLOTS) return;
+  const i = Math.min(G.sel, UI.SLOTS - 1), out = c[i], fresh = c[c.length - 1];
+  putDown(out);
+  G.slotOrder = G.slotOrder.filter((id) => id !== fresh.id);
+  G.slotOrder.splice(i, 0, fresh.id);
+}
+// a save holds what you put down as if it were still in your hands (it comes back to your feet when you load)
+function withDropsHeld(fn) {
+  const ds = (G.drops || []).slice();
+  for (const d of ds) HELD[d.k].give(d.data);
+  try { return fn(); } finally { for (const d of ds) HELD[d.k].take(d.data); }
+}
+addEventListener('keydown', (e) => {
+  if (G.state !== 'play' || player.hidden || e.repeat) return;
+  if (e.code === 'Digit1' || e.code === 'Digit2') G.sel = e.code === 'Digit1' ? 0 : 1;
+  if (e.code === 'KeyG' && !e.ctrlKey && !e.metaKey) { const c = carried(); putDown(c[G.sel] || c[0]); }
+});
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 0 || G.state !== 'play' || document.pointerLockElement !== canvas) return;
   if (G.mode === 'hunt') { huntSwing(); return; }
@@ -2227,7 +2298,8 @@ if (TOUCH) {
   initTouch({
     look: (dx, dy) => { const k = (save.settings.tsens ?? 1) / (player.sens || 1); player.look(dx * k, dy * k); }, active: () => G.state === 'play', // touch has its own sensitivity
     show: () => ({ fire: G.mode === 'hunt' || G.inv.built, breath: !!player.hidden }),
-    tap: (id) => { if (id === 'syringe') tapKey('KeyR'); }, // a syringe tapped in the hotbar goes in
+    // a box tapped: picks it; tapped again, what's in it goes down (a syringe goes in instead)
+    tap: (id) => { const i = carried().findIndex((x) => x.id === id); if (id === 'syringe') tapKey('KeyR'); else if (i === G.sel) tapKey('KeyG'); else if (i >= 0) G.sel = i; },
     fire: () => {
     if (G.mode === 'hunt') { huntSwing(); return; }
     if (gun.fire(player) === false && G.inv.built && G.inv.ammo <= 0) UI.message('Empty.', 1.2);

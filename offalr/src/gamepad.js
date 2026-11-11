@@ -12,7 +12,7 @@ const DEAD = 0.18;
 const dz = (v) => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
 
 // what each button holds down while you play (hold) or taps once (tap)
-const PLAY = [[0, 'KeyE', 'hold'], [1, 'KeyC', 'tap'], [2, 'KeyQ', 'hold'], [3, 'KeyF', 'tap'], [6, 'Space', 'hold'], [12, 'KeyR', 'tap'], [9, 'KeyP', 'tap'], [8, 'Tab', 'tap']];
+const PLAY = [[13, 'KeyG', 'tap'], [14, 'Digit1', 'tap'], [15, 'Digit2', 'tap'], [0, 'KeyE', 'hold'], [1, 'KeyC', 'tap'], [2, 'KeyQ', 'hold'], [3, 'KeyF', 'tap'], [6, 'Space', 'hold'], [12, 'KeyR', 'tap'], [9, 'KeyP', 'tap'], [8, 'Tab', 'tap']];
 
 export function initGamepad({ look, fire, playing, onUse }) {
   let pad = -1, prev = [], held = new Set(), moveHeld = new Set(), navT = 0, focus = null, lastT = 0;

@@ -132,9 +132,9 @@ export function hud({ floor, battery, breath, hidden, breathUrgent, items = [] }
   if (hidden) $('breathFill').style.transform = `scaleX(${breath / 100})`;
 }
 
-// ---------- what you carry: five boxes along the bottom of the screen ----------
-// a box holds one kind of thing, as many of it as you like. items: [{ id, name, n, sub, key }]
-export const SLOTS = 5;
+// ---------- what you carry: two boxes along the bottom of the screen ----------
+// a box holds one kind of thing, as many of it as you like. items: [{ id, name, n, sub, key }], items.sel the picked box
+export const SLOTS = 2;
 const ICON = {
   tag: '<rect x="11" y="5" width="18" height="28" rx="7" fill="#b08a3a" stroke="#e0bc64"/><circle cx="20" cy="11" r="2.2" fill="#140a06"/><path d="M13 24c4-2 9 1 14-1v7c-5 2-10 0-14 1z" fill="#7a0604"/>',
   syringe: '<g transform="rotate(-40 20 20)"><rect x="16" y="9" width="8" height="20" rx="1.5" fill="none" stroke="#d8cdb8"/><rect x="17" y="17" width="6" height="11" fill="#b01008"/><path d="M14 9h12M20 9V4M18 4h4M20 29v8" stroke="#d8cdb8" stroke-width="1.6"/></g>',
@@ -153,10 +153,11 @@ function hotbar(items) {
   let html = '';
   for (let i = 0; i < SLOTS; i++) {
     const it = items[i];
-    if (!it) { html += '<div class="slot empty"></div>'; continue; }
-    html += `<div class="slot" data-id="${it.id}"><svg viewBox="0 0 40 40">${ICON[it.id] || ''}</svg>`
+    const sel = i === (items.sel || 0) ? ' sel' : '';
+    if (!it) { html += `<div class="slot empty${sel}"><kbd class="k">${i + 1}</kbd></div>`; continue; }
+    html += `<div class="slot${sel}" data-id="${it.id}"><kbd class="k">${i + 1}</kbd>${sel ? `<kbd class="g">${touchMode ? 'TAP' : 'G'}</kbd>` : ''}<svg viewBox="0 0 40 40">${ICON[it.id] || ''}</svg>`
       + (it.n > 1 ? `<span class="n">\u00D7${it.n}</span>` : '')
-      + (it.key ? `<kbd>${it.key}</kbd>` : '')
+      + (it.key ? `<kbd class="u">${it.key}</kbd>` : '')
       + `<span class="nm">${it.name}${it.sub ? `<i>${it.sub}</i>` : ''}</span></div>`;
   }
   host.innerHTML = html;
