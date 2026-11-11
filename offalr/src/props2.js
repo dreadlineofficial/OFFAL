@@ -7,6 +7,7 @@ import { WALL_H } from './config.js';
 import { mesh, geo, box, sph, cyl, cap, decal, makeBody, trayBody, meatChunk, severedArm, layOn } from './props.js';
 import { canvas, BLOOD, wallSplat } from './textures.js';
 import { vendingHD } from './vendr.js';
+import { forkliftHD } from './forklift.js';
 
 const phong = (o) => new THREE.MeshPhongMaterial(o);
 function M(mats) {
@@ -458,13 +459,8 @@ export function palletRack(mats, rng, len = 3.6) {
   return g;
 }
 export function forklift(mats, rng) {
-  const m = M(mats), g = g0();
-  g.add(at(mesh(box(1.1, 0.9, 1.9), m.yellow), 0, 0.65, 0));
-  g.add(at(mesh(box(1.05, 0.08, 1.1), m.black), 0, 2.1, -0.1));
-  for (const sx of [-1, 1]) { g.add(at(mesh(box(0.06, 1.8, 0.06), m.black), sx * 0.45, 1.2, 0.5)); g.add(at(mesh(box(0.06, 1.8, 0.06), m.black), sx * 0.45, 1.2, -0.7)); }
-  for (const sx of [-1, 1]) { g.add(at(mesh(box(0.08, 2.4, 0.1), m.black), sx * 0.35, 1.25, 1.0)); g.add(at(mesh(box(0.12, 0.06, 1.1), mats.steel), sx * 0.3, 0.12, 1.55)); }
-  for (const [sx, z] of [[-1, 0.6], [1, 0.6], [-1, -0.6], [1, -0.6]]) { const wh = mesh(cyl(0.28, 0.28, 0.22, 12), m.black); wh.rotation.z = Math.PI / 2; g.add(at(wh, sx * 0.56, 0.28, z)); }
-  if (rng() < 0.5) { const b = makeBody(mats, rng, { dead: true }); b.root.rotation.set(-1.2, 0, 0.3); b.root.position.set(0, 1.0, -0.3); g.add(b.root); } // still at the wheel
+  const g = forkliftHD(mats);
+  if (rng() < 0.5) { const b = makeBody(mats, rng, { dead: true }); b.root.rotation.set(-1.2, 0, 0.3); b.root.position.set(0, 1.22, -0.3); g.add(b.root); } // still at the wheel
   return g;
 }
 // a refrigeration unit high on a wall: fans, coils, icicles; origin on the wall facing +Z
@@ -557,9 +553,30 @@ export function conveyor(mats, rng, len = 3.6) {
   for (const sz of [-1, 1]) g.add(atr(mesh(box(len, 0.12, 0.05), f.frame), 0, 0.82, sz * 0.36)); // side rails
   for (let x = -len / 2 + 0.25; x <= len / 2 - 0.2; x += 1.1) for (const sz of [-1, 1]) g.add(atr(mesh(box(0.06, 0.8, 0.06), f.frame), x, 0.4, sz * 0.32)); // legs
   g.add(atr(mesh(box(len - 0.1, 0.03, 0.6), f.belt), 0, 0.86, 0));
+  // underneath: cross braces and feet on every pair of legs, the return run of the belt, a drip tray, the drive
+  for (let x = -len / 2 + 0.25; x <= len / 2 - 0.2; x += 1.1) {
+    g.add(atr(mesh(box(0.04, 0.04, 0.64), f.frame), x, 0.22, 0));
+    for (const sz of [-1, 1]) g.add(atr(mesh(cyl(0.05, 0.05, 0.02, 10), mats.darkMetal), x, 0.01, sz * 0.32));
+  }
+  g.add(atr(mesh(box(len - 0.3, 0.012, 0.56), f.belt), 0, 0.7, 0)); // the belt coming back underneath
+  g.add(atr(mesh(box(len - 0.5, 0.05, 0.62), f.ss), 0, 0.42, 0)); // drip tray
+  g.add(atr(mesh(box(len * 0.45, 0.006, 0.3), mats.blood), len * 0.1, 0.448, 0.05)); // what's in it
+  for (const sz of [-1, 1]) g.add(atr(mesh(box(len - 0.2, 0.05, 0.012), f.ss), 0, 0.91, sz * 0.31)); // side skirts holding the meat on
+  g.add(atr(mesh(cyl(0.11, 0.11, 0.3, 14), f.frame), -len / 2 + 0.35, 0.62, -0.18, Math.PI / 2)); // the motor
+  g.add(atr(mesh(box(0.2, 0.22, 0.18), f.frame), -len / 2 + 0.35, 0.62, 0.08)); // gearbox
+  for (let i = 0; i < 5; i++) g.add(atr(mesh(box(0.012, 0.2, 0.22), mats.darkMetal), -len / 2 + 0.27 + i * 0.04, 0.62, -0.18)); // cooling fins
+  g.add(atr(mesh(cyl(0.012, 0.012, 0.6, 6), f.hose), -len / 2 + 0.35, 0.36, -0.3)); // its cable
   for (const ex of [-1, 1]) { const r = mesh(cyl(0.07, 0.07, 0.62, 10), f.ss); g.add(atr(r, ex * (len / 2 - 0.06), 0.84, 0, Math.PI / 2)); } // end rollers
-  g.add(atr(mesh(box(0.22, 0.3, 0.16), f.guard), len / 2 - 0.3, 1.1, -0.42)); // a stop button box, yellow, with the red mushroom
-  g.add(atr(mesh(cyl(0.04, 0.04, 0.04, 10), f.red), len / 2 - 0.3, 1.15, -0.34, Math.PI / 2));
+  // the stop station: a yellow box on its own post, bolted to the frame, with the red mushroom and its collar
+  const ex = len / 2 - 0.3;
+  g.add(atr(mesh(box(0.05, 1.0, 0.05), f.frame), ex, 0.5, -0.46)); // post
+  g.add(atr(mesh(box(0.2, 0.025, 0.2), f.frame), ex, 0.012, -0.46)); // foot plate
+  g.add(atr(mesh(box(0.05, 0.05, 0.1), f.frame), ex, 0.8, -0.4)); // bracket to the side rail
+  g.add(atr(mesh(box(0.22, 0.3, 0.16), f.guard), ex, 1.12, -0.46));
+  g.add(atr(mesh(box(0.2, 0.01, 0.14), f.frame), ex, 1.275, -0.46)); // lid seam
+  g.add(atr(mesh(cyl(0.05, 0.05, 0.015, 14), mats.darkMetal), ex, 1.15, -0.375, Math.PI / 2));
+  g.add(atr(mesh(cyl(0.045, 0.035, 0.04, 14), f.red), ex, 1.15, -0.35, Math.PI / 2));
+  g.add(atr(mesh(cyl(0.012, 0.012, 0.1, 6), f.hose), ex, 1.0, -0.46)); // the cable down the post
   // what's on it: cuts and offcuts, left where the line stopped
   for (let x = -len / 2 + 0.4; x < len / 2 - 0.3; x += 0.35 + rng() * 0.5) {
     if (rng() < 0.25) continue;
