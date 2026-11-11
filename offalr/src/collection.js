@@ -39,5 +39,6 @@ export const CUTSCENE_INFO = {
   beaten: { name: 'Beaten', text: 'Beaten until there was nothing left to hit.' },
   brains: { name: 'Emptied', text: 'The top of the skull off, and what was in it taken out by hand.' },
   smoke: { name: 'Smoke Break', text: 'Roped to a table and set alight. He had a cigarette while it burned.' },
+  forklift: { name: 'Right of Way', text: 'On the factory floor. He drove over you, backed up, and parked.' },
   ending: { name: 'Clocking Out', text: 'The end of the shift.' },
 };

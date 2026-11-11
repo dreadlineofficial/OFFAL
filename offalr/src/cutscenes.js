@@ -11,6 +11,7 @@
 //   beaten  - (third person) held up and beaten, then dropped and pounded until there's nothing left
 //   brains  - (third person) the top of your skull taken off with the cleaver, and your brain drawn out by hand
 //   smoke   - (third person) roped to a table, hit between the legs and set alight; he has a cigarette in the corner
+//   forklift- (third person, B10 only) he runs you down with a forklift, backs over you, and parks on you
 // Each one builds its own little stage, runs off a timeline, and throws gore around with a small physics pass.
 import * as THREE from 'three';
 import { createForemanMesh, poseForeman } from './monster.js';
@@ -20,7 +21,9 @@ import { heart, liver, lung, stomach, kidney, guts, eyeball, organSet, splitBody
 import { canvas, themeMaterials } from './textures.js';
 import { makeRng } from './rng.js';
 
-export const CUTSCENES = ['rope', 'exit', 'grinder', 'fan', 'eaten', 'rack', 'torn', 'minced', 'packed', 'beaten', 'brains', 'smoke'];
+export const CUTSCENES = ['rope', 'exit', 'grinder', 'fan', 'eaten', 'rack', 'torn', 'minced', 'packed', 'beaten', 'brains', 'smoke', 'forklift'];
+// films that only belong on one floor: the forklift is on the factory floor (B10)
+export const FLOOR_FILM = { forklift: 'hall' };
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const ease = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
@@ -2637,6 +2640,148 @@ export class Cutscene {
       [7.35, V(0.0, 2.4, 4.8), V(-0.3, 1.0, 0)], [LAST - 0.1, V(0.2, 2.3, 4.6), V(-0.2, 1.0, 0)], [LAST - 0.05, V(2.1, 1.0, 1.7), V(1.5, 0.45, 0)], [LAST + 1.6, V(1.9, 1.1, 1.9), V(1.4, 0.3, 0)]]);
     this.fear = 1;
     this.at(this.dur - 0.5, 'black', () => (this.blackout = 1));
+  }
+
+  // ---------- 13: run down (third person, B10 only) ----------
+  // On the factory floor. You're on your back on the concrete, pushing yourself away. Down the aisle the work lights
+  // of a forklift come on; he's folded into the seat, knees up round the wheel. He drives straight at you. The forks
+  // knock you down and the wheel goes over you; he stops, backs up over you again, and parks with the wheel on you.
+  // Then he turns his head and looks at you.
+  forkliftBuild() {
+    this.dur = 11;
+    const s = this.scene, m = this.mats;
+    this.stage(10, 34, V(0.6, 0, 0.6), V(0.4, 0.4, 0.2));
+    s.fog.density = 0.07;
+    // the aisle: a conveyor down one side, crates and drums on the other, a pipe run overhead
+    for (const z of [-12, -7.8, -3.6, 0.6]) { const c = conveyor(m, Math.random, 3.6); c.position.set(-2.6, 0, z); c.rotation.y = Math.PI / 2; s.add(c); }
+    for (const z of [-10, -4, 3.5]) { const c = crateStack(m, Math.random); c.position.set(3.7, 0, z); s.add(c); }
+    const pr = pipeRun(m, 30, Math.random); pr.position.set(-1.6, 3.1, -6); pr.rotation.y = Math.PI / 2; s.add(pr);
+    // lamps down the aisle, most of them dead: he drives through what light there is
+    for (const z of [-5.5, -11]) { const lp = makeLamp(m, 'bulb'); lp.position.set(0.2, 3.1, z); s.add(lp); const sp = new THREE.SpotLight(0xfff0dc, 30, 8, 0.9, 0.6, 1.3); sp.position.set(0.2, 3.0, z); sp.target.position.set(0.2, 0, z); s.add(sp, sp.target); }
+    // the truck, his seat, and his own lights
+    const fk = forklift(m, () => 0.9); // (0.9: nobody else at the wheel)
+    fk.position.set(0, 0, -14); s.add(fk);
+    this.fk = fk; this.fkU = fk.userData;
+    this.fkU.carriage.position.y = 0.22; // forks carried just off the floor
+    this.lights = [];
+    for (const sx of [-1, 1]) {
+      const l = new THREE.SpotLight(0xfff2dc, 0, 16, 0.45, 0.5, 1.3); l.position.set(sx * 0.47, 1.95, 0.72); l.target.position.set(sx * 0.3, 0, 7); fk.add(l, l.target); this.lights.push(l);
+    }
+    const dash = new THREE.PointLight(0xff5030, 0, 1.6, 2); dash.position.set(0, 1.5, 0.25); fk.add(dash); this.dash = dash; // the dash lights his face from below
+    // him, folded into the seat: knees up either side of the wheel
+    const f = this.him;
+    fk.add(f.root); f.root.position.set(0, 0.07, -0.33); f.root.rotation.y = 0;
+    // you
+    this.you = makeWorker(m);
+    const you = this.you; s.add(you.root);
+    this.youX = 0.48; // in line with his right front wheel
+    const tmp = new THREE.Object3D();
+    orient(tmp, V(0, 0.5, 1), V(0, 1, -0.5)); this.propQ = tmp.quaternion.clone(); // up on your elbows, feet toward him
+    orient(tmp, V(0.1, 0.02, 1), V(0, 1, 0)); this.flatQ = tmp.quaternion.clone(); // flat on your back
+    orient(tmp, V(0, 1, 0.35), V(0, 0.35, -1)); this.upQ = tmp.quaternion.clone(); // halfway up
+    this.squash = 1;
+  }
+  forkliftUpdate(dt) {
+    const t = this.t, f = this.him, fk = this.fk, U = this.fkU, you = this.you;
+    const START = 1.4, HIT = 4.2, STOP = 5.6, BACK = 6.3, PARK = 7.6, LOOK = 8.0;
+    // where the truck is: idling; flat out at you; rolling on over you; a stop; back over you; parked on you
+    let z;
+    if (t < START) z = -14;
+    else if (t < HIT) z = -14 + 13.7 * Math.pow((t - START) / (HIT - START), 1.5);
+    else if (t < STOP) z = -0.3 + 3.8 * (1 - Math.pow(1 - (t - HIT) / (STOP - HIT), 2));
+    else if (t < BACK) z = 3.5;
+    else if (t < PARK) z = 3.5 - 3.3 * ease((t - BACK) / (PARK - BACK));
+    else z = 0.2;
+    const dz = z - fk.position.z;
+    fk.position.z = z;
+    for (const w of U.wheels) w.rotation.x += dz / (w.position.y || 0.3);
+    // the right side rides up over you, and drops
+    const yz = 0.75, bump = (wz) => { const d = Math.abs(wz - yz); return d < 0.35 && t > HIT ? (1 - d / 0.35) * 0.12 : 0; };
+    const lift = Math.max(bump(z + 0.55), bump(z - 0.62));
+    fk.rotation.z = -lift * 0.9; fk.position.y = lift * 0.45;
+    U.steer.rotation.y = Math.sin(t * 2.3) * 0.15 * (t > START && t < PARK ? 1 : 0);
+    // lights and engine
+    this.at(1.0, 'lights', () => { for (const l of this.lights) l.intensity = 60; this.dash.intensity = 3; this.flash = 0.25; this.audio.clank(V(0, 1, -14), 1); });
+    this.at(1.15, 'engine', () => { this.audio.engine(true); this.audio.rev(0.3); this.audio.roar(V(0, 2, -14)); });
+    this.at(START, 'go', () => this.audio.rev(1));
+    this.at(STOP - 0.3, 'brake', () => { this.audio.rev(0.1); this.audio.creak(V(0, 0.5, 3.5)); });
+    this.at(BACK, 'rev2', () => { this.audio.rev(0.8); this.audio.growl(V(0, 2, 3.5), 1); });
+    this.at(PARK - 0.2, 'idle', () => this.audio.rev(0.05));
+    // him at the wheel: hunched under the roof, knees up, hands on the rim
+    const staring = t > LOOK;
+    this.pose({ mode: 'walk', jaw: staring ? 0.95 : 0.3 + Math.sin(t * 6) * 0.15, twitch: staring ? { x: 0, y: 0, z: 0, r: 0 } : this.twitch(0.05) });
+    f.hips.position.y = 1.15; f.hips.rotation.y = 0;
+    f.legs.forEach((l, i) => { l.thigh.rotation.set(-1.85, 0, (i ? -1 : 1) * 0.42); l.knee.rotation.x = 2.05; });
+    f.torso.rotation.set(0.55, 0, 0);
+    f.neck.rotation.x = -0.45;
+    if (staring) { // his head comes round, too far, to look back at you
+      const k = ease((t - LOOK) / 0.5);
+      f.head.rotation.set(-0.1 * k, 1.15 * k, 0.3 * k);
+      this.at(LOOK + 0.1, 'stare', () => { this.audio.jumpscare(0.7); this.flash = 0.3; });
+    }
+    if (f.apron) f.apron.update(f);
+    fk.updateMatrixWorld(true);
+    const rimAt = (a) => U.steer.localToWorld(V(Math.cos(a) * 0.17, 0.02, Math.sin(a) * 0.17));
+    this.reach(0, rimAt(Math.PI + 0.5 + U.steer.rotation.y)); this.reach(1, rimAt(-0.5 + U.steer.rotation.y));
+    if (f.poseR) {} // (the remastered motion is part of pose())
+    // you: pushing yourself back along the floor, trying to get up, knocked flat, run over
+    const crawl = Math.min(t, HIT) * 0.15;
+    if (t < 3.5) {
+      you.root.quaternion.copy(this.propQ); you.root.position.set(this.youX, 0.3, crawl);
+      you.legs.forEach((l, i) => l.rotation.set(-0.4 + Math.sin(t * 8 + i * 3) * 0.45, 0, (i ? -1 : 1) * 0.15));
+      you.arms.forEach((a, i) => a.rotation.set(0.9 + Math.sin(t * 8 + i * 3) * 0.2, 0, (i ? 1 : -1) * 0.5));
+      you.neck.rotation.set(0.5, 0, 0); you.jaw.rotation.x = 0.5;
+    } else if (t < HIT) { // up on one knee, too late
+      const k = ease((t - 3.5) / 0.6);
+      you.root.quaternion.slerpQuaternions(this.propQ, this.upQ, k); you.root.position.set(this.youX, lerp(0.3, 0.7, k), crawl);
+      you.arms.forEach((a, i) => a.rotation.set(-1.6, 0, (i ? 1 : -1) * 0.4)); // hands up at the lights
+      you.jaw.rotation.x = 0.7;
+    } else { // down, under it
+      const k = ease((t - HIT) / 0.25);
+      you.root.quaternion.slerpQuaternions(this.upQ, this.flatQ, k); you.root.position.set(this.youX, lerp(0.7, 0.13, k), lerp(crawl, 0.75, k));
+      you.legs.forEach((l, i) => l.rotation.set(0.1, 0, (i ? -1 : 1) * 0.3)); you.arms.forEach((a, i) => a.rotation.set(-0.4, 0, (i ? 1 : -1) * 1.1));
+      you.neck.rotation.set(-0.2, 0, 0.4); you.jaw.rotation.x = 0.6;
+      if (lift > 0.06 && !this.flat) this.flatten(); // what the wheel does
+      you.root.position.y -= (1 - this.squash) * 0.08;
+    }
+    this.at(0.25, 'scream', () => this.audio.scream());
+    this.at(HIT, 'hit', () => { this.audio.punch(1.4, 0.6); this.audio.clank(V(this.youX, 0.6, 0.6), 1.2); this.shake = 1.2; this.audio.wheeze(0.8); });
+    this.at(HIT + 0.35, 'over1', () => this.crush(1));
+    this.at(STOP - 0.35, 'over2', () => this.crush(0.7));
+    this.at(PARK - 0.6, 'over3', () => this.crush(0.9));
+    this.at(PARK + 0.3, 'rain', () => this.audio.spatter(1));
+    // the camera: down the aisle from behind you; the lights coming on; him coming, from the side; your eyes; under the
+    // wheel; from above as he backs over you; and his face
+    if (!staring && t >= START && t < 3.05) { // riding alongside him as he comes
+      const k = ease((t - START) / 1.65);
+      this.cam.position.set(lerp(2.0, 1.5, k), lerp(1.3, 1.7, k), z + lerp(2.8, 1.6, k));
+      this.cam.lookAt(V(0, 1.55, z + 0.1));
+    } else if (!staring) this.shots([[0, V(this.youX + 0.5, 0.55, 2.4), V(0, 0.9, -10)], [START - 0.1, V(this.youX + 0.45, 0.6, 2.2), V(0, 1.3, -10)], [3.05, V(this.youX + 0.75, 0.75, 1.7), V(0, 1.7, -2.5)], [HIT - 0.05, V(this.youX + 0.8, 0.8, 1.6), V(0, 1.8, -0.8)],
+      [HIT, V(2.0, 0.45, 1.8), V(this.youX, 0.3, 0.6)], [STOP, V(2.2, 0.5, 2.2), V(this.youX, 0.3, 1.0)], [STOP + 0.05, V(2.4, 3.4, 3.2), V(0.3, 0.3, 1.2)], [PARK, V(2.0, 3.6, 2.6), V(0.3, 0.6, 0.8)]]);
+    else {
+      const hp = this.headPos(); if (!this.stareFrom) this.stareFrom = hp.clone().add(V(1.9, 0.1, 1.5)); // (a cut: outside the cab, beside him)
+      const to = hp.clone().add(V(0.95, -0.05, 0.75)); const k = ease((t - LOOK - 0.2) / 1.6);
+      this.cam.position.lerpVectors(this.stareFrom, to, k); this.cam.lookAt(hp);
+    }
+    this.fear = 1;
+    this.at(this.dur - 0.5, 'black', () => (this.blackout = 1));
+  }
+  // the wheel going over you
+  crush(w) {
+    const you = this.you, at = you.torso.getWorldPosition(V());
+    this.audio.crunch(1.2 * w); this.audio.gib(0.6 * w); this.shake = 0.8 + w * 0.5;
+    this.gore.spray(at, V(1, 0.3, 0), 160 * w, 3 * w, 0.8); this.gore.spray(at, V(-1, 0.3, 0.2), 120 * w, 2.5 * w, 0.7);
+    this.scene.add(decal(this.mats.splat[(Math.random() * 4) | 0], 1.0 + w, at.x + (Math.random() - 0.5) * 0.6, at.z + (Math.random() - 0.5) * 0.6, Math.random() * 6, 0.011 + Math.random() * 0.001));
+  }
+  flatten() {
+    this.flat = true;
+    const you = this.you, at = you.torso.getWorldPosition(V());
+    if (THREE.gore.less) return;
+    this.squash = 0.35;
+    you.torso.scale.z *= 0.4; you.torso.scale.x *= 1.25; you.head.scale.set(1.3, 0.85, 0.45);
+    this.drop([...organSet(this.mats), guts(this.mats, 0.08, 4), meatChunk(this.mats, Math.random), meatChunk(this.mats, Math.random)], at.clone().add(V(0.3, 0.1, 0)), 1.4, 0.3);
+    this.scene.add(guts(this.mats, 0.16).translateX(at.x + 0.35).translateZ(at.z));
+    this.scene.add(decal(this.mats.pool[0], 2.4, at.x, at.z, 0.4, 0.0125));
   }
 
   // ---------- 10: beaten (third person) ----------

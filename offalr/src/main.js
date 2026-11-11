@@ -23,7 +23,7 @@ import { AudioEngine } from './audio.js';
 import { Post } from './post.js';
 import { Director } from './director.js';
 import { Guide } from './guide.js';
-import { Cutscene, CUTSCENES, compileSoon } from './cutscenes.js';
+import { Cutscene, CUTSCENES, FLOOR_FILM, compileSoon } from './cutscenes.js';
 import * as UI from './ui.js';
 import * as P from './props.js';
 import { floorInfo, difficulty, WALL_H, STORY_FLOORS, DIFFS, THEMES, DEMO, DEMO_LAST } from './config.js';
@@ -435,7 +435,13 @@ function loadFloor(depth, seed) {
 // time each thing comes into view, which is a stall in the middle of play
 // the film you'll see if he gets you on this floor, chosen and built now, behind the load. Built at the moment he
 // grabbed you, it stalled the grab halfway (the scream carried on, then the picture caught up: it looked like a replay)
-function deathPool() { return (save.settings.lessGore ? ['exit', 'beaten', 'smoke'] : CUTSCENES).filter((c) => c !== save.lastCut); }
+// (a floor's own film: the forklift only on the factory floor, B10, where it comes up more often than the rest)
+function deathPool() {
+  const own = (c) => !FLOOR_FILM[c] || (G.D && G.D[FLOOR_FILM[c]]);
+  const pool = (save.settings.lessGore ? ['exit', 'beaten', 'smoke'] : CUTSCENES).filter((c) => c !== save.lastCut && own(c));
+  for (const c of pool.slice()) if (FLOOR_FILM[c]) pool.push(c, c, c); // (four chances in the draw)
+  return pool;
+}
 function prepDeathFilm() {
   if (G.nextCs) { G.nextCs.dispose(); G.nextCs = null; }
   if (!REMASTER || !G.D || G.D.intro || !G.D.hunters) return;
